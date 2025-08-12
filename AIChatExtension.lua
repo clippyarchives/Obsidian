@@ -409,33 +409,22 @@ local function attach(win, opt)
         gRight:AddToggle("AI_USE_GSCRIPT", { Text = "Include in AI"; Default = false; Callback = function(v) if currentInst then include_game_scripts[currentInst]=v end end })
     end
 
-    local function add_script_button(inst)
-        local path = instance_path(inst)
-        gLeft:AddButton({ Text = path; Func = function()
-            currentInst = inst
-            ed:SetText("-- decompiling "..path.." ...")
-            task.spawn(function()
-                local ok, src = pcall(function() return decompile(inst) end)
-                local code = ok and src or "-- decompile failed"
-                scripts_store[inst] = code
-                ed:SetText(code)
-            end)
-        end })
-    end
-
-    local function rebuild_game_scripts()
-        gLeft.Elements = gLeft.Elements or {}
-        for _,el in ipairs(gLeft.Elements) do if el.Holder then el.Holder:Destroy() end end
-        gLeft.Elements = {}
-        for _,inst in ipairs(game:GetDescendants()) do
-            if inst:IsA("LocalScript") or inst:IsA("ModuleScript") or inst:IsA("Script") then
-                add_script_button(inst)
-            end
+    -- only localscript and modulescript buttons
+    for _,inst in ipairs(game:GetDescendants()) do
+        if inst:IsA("LocalScript") or inst:IsA("ModuleScript") then
+            local path = instance_path(inst)
+            gLeft:AddButton({ Text = path; Func = function()
+                currentInst = inst
+                ed:SetText("-- decompiling "..path.." ...")
+                task.spawn(function()
+                    local ok, src = pcall(function() return decompile(inst) end)
+                    local code = ok and src or "-- decompile failed"
+                    scripts_store[inst] = code
+                    ed:SetText(code)
+                end)
+            end })
         end
     end
-
-    gLeft:AddButton({ Text = "Refresh"; Func = rebuild_game_scripts })
-    rebuild_game_scripts()
 
     local function render_reply(text)
         local i = 1
