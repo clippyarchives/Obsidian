@@ -71,6 +71,14 @@ local function attach(win, opt)
     local sys = opt.system or "you are a helpful assistant"
     local ide = opt.ide
 
+    local rules = { sys }
+
+    local function build_messages()
+        local m = {}
+        for _,r in ipairs(rules) do table.insert(m,{role="system",content=r}) end
+        return m
+    end
+
     local function insert_code(src)
         if ide and ide.GetText and ide.SetText then
             ide:SetText((ide:GetText() or "") .. ( (#ide:GetText()>0 and "\n" or "") ) .. src)
@@ -139,7 +147,87 @@ local function attach(win, opt)
     btn.Position = UDim2.new(1,-96,0,0)
     btn.Parent = row
 
-    local msgs = { { role = "system", content = sys } }
+    -- Rules tab
+    local rtab = win:AddKeyTab("AI Rules")
+    local rh = Instance.new("Frame")
+    rh.BackgroundTransparency = 1
+    rh.Size = UDim2.new(1,0,1,0)
+    rh.Parent = rtab.Container
+
+    local rbox = Instance.new("ScrollingFrame")
+    rbox.BackgroundColor3 = lib.Scheme.MainColor
+    rbox.BorderColor3 = lib.Scheme.OutlineColor
+    rbox.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    rbox.CanvasSize = UDim2.fromOffset(0,0)
+    rbox.ScrollBarThickness = 2
+    rbox.Size = UDim2.new(1,-12,1,-66)
+    rbox.Position = UDim2.fromOffset(6,6)
+    rbox.Parent = rh
+
+    local rlist = Instance.new("UIListLayout")
+    rlist.Padding = UDim.new(0,6)
+    rlist.Parent = rbox
+
+    local rrow = Instance.new("Frame")
+    rrow.BackgroundTransparency = 1
+    rrow.Size = UDim2.new(1,-12,0,44)
+    rrow.Position = UDim2.new(0,6,1,-50)
+    rrow.Parent = rh
+
+    local rinp = Instance.new("TextBox")
+    rinp.BackgroundColor3 = lib.Scheme.MainColor
+    rinp.BorderColor3 = lib.Scheme.OutlineColor
+    rinp.ClearTextOnFocus = false
+    rinp.TextXAlignment = Enum.TextXAlignment.Left
+    rinp.TextYAlignment = Enum.TextYAlignment.Center
+    rinp.FontFace = lib.Scheme.Font
+    rinp.TextColor3 = lib.Scheme.FontColor
+    rinp.TextSize = 14
+    rinp.PlaceholderText = "add rule..."
+    rinp.Size = UDim2.new(1,-210,1,0)
+    rinp.Parent = rrow
+
+    local radd = Instance.new("TextButton")
+    radd.BackgroundColor3 = lib.Scheme.MainColor
+    radd.BorderColor3 = lib.Scheme.OutlineColor
+    radd.Text = "add"
+    radd.FontFace = lib.Scheme.Font
+    radd.TextSize = 14
+    radd.TextColor3 = lib.Scheme.FontColor
+    radd.Size = UDim2.new(0,96,1,0)
+    radd.Position = UDim2.new(1,-200,0,0)
+    radd.Parent = rrow
+
+    local rclear = Instance.new("TextButton")
+    rclear.BackgroundColor3 = lib.Scheme.MainColor
+    rclear.BorderColor3 = lib.Scheme.OutlineColor
+    rclear.Text = "clear"
+    rclear.FontFace = lib.Scheme.Font
+    rclear.TextSize = 14
+    rclear.TextColor3 = lib.Scheme.FontColor
+    rclear.Size = UDim2.new(0,96,1,0)
+    rclear.Position = UDim2.new(1,-96,0,0)
+    rclear.Parent = rrow
+
+    local function refresh_rules()
+        for _,c in ipairs(rbox:GetChildren()) do if c:IsA("TextLabel") then c:Destroy() end end
+        for i,r in ipairs(rules) do add_lbl(rbox, tostring(i)..". "..r) end
+    end
+
+    radd.MouseButton1Click:Connect(function()
+        local t = rinp.Text
+        if t=="" then return end
+        rinp.Text = ""
+        table.insert(rules, t)
+        refresh_rules()
+    end)
+
+    rclear.MouseButton1Click:Connect(function()
+        rules = {}
+        refresh_rules()
+    end)
+
+    refresh_rules()
 
     local function render_reply(text)
         local i = 1
@@ -165,26 +253,27 @@ local function attach(win, opt)
         inp.Text = ""
         add_lbl(box, "> "..q)
         local waitlbl = add_lbl(box, "...")
-        table.insert(msgs, { role = "user", content = q })
+        local base = build_messages()
+        table.insert(base, { role = "user", content = q })
         busy = true
         local r = request({
             Url = "https://api.openai.com/v1/chat/completions";
             Method = "POST";
             Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; };
-            Body = hs:JSONEncode({ model = model; messages = msgs; });
+            Body = hs:JSONEncode({ model = model; messages = base; });
         })
         local ok, data = pcall(hs.JSONDecode, hs, r and r.Body or "{}")
         local out = (ok and data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content) or "error"
         waitlbl:Destroy()
         render_reply(out)
-        table.insert(msgs, { role = "assistant", content = out })
+        table.insert(rules, sys) -- keep original
         busy = false
     end
 
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    return { tab = tab, send = send }
+    return { tab = tab, rules_tab = rtab, send = send, add_rule = function(t) table.insert(rules,t); refresh_rules() end }
 end
 
 return { attach = attach }
