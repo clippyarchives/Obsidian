@@ -51,7 +51,7 @@ local function instance_path(inst)
     return table.concat(segs, ".")
 end
 
--- snapshot that ALWAYS traverses; only adds lines when filters match; supports multi filters
+-- snapshot always traverses; adds line only when filters match; supports multi filters
 local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classList, nameList, path)
     if #lines >= maxLines then return end
 
@@ -413,10 +413,13 @@ local function attach(win, opt)
         local path = instance_path(inst)
         gLeft:AddButton({ Text = path; Func = function()
             currentInst = inst
-            local ok, src = pcall(function() return decompile(inst) end)
-            local code = ok and src or "-- decompile failed"
-            ed:SetText(code)
-            scripts_store[inst] = code
+            ed:SetText("-- decompiling "..path.." ...")
+            task.spawn(function()
+                local ok, src = pcall(function() return decompile(inst) end)
+                local code = ok and src or "-- decompile failed"
+                scripts_store[inst] = code
+                ed:SetText(code)
+            end)
         end })
     end
 
