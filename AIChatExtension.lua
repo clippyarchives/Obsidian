@@ -24,19 +24,12 @@ local function attach(win, opt)
     local model = opt.model or "gpt-5"
     local sys = opt.system or "you are a helpful assistant"
 
-    local tab = win:AddTab("AI Chat", "message-circle")
-
-    local container = (tab.Sides and tab.Sides[1] and tab.Sides[1].Parent) or tab.Container
-    if tab.Sides then
-        for _, side in ipairs(tab.Sides) do
-            side.Visible = false
-        end
-    end
+    local tab = win:AddKeyTab("AI Chat")
 
     local holder = Instance.new("Frame")
     holder.BackgroundTransparency = 1
     holder.Size = UDim2.new(1,0,1,0)
-    holder.Parent = container
+    holder.Parent = tab.Container
 
     local box = Instance.new("ScrollingFrame")
     box.BackgroundColor3 = lib.Scheme.MainColor
