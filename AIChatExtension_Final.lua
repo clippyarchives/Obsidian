@@ -598,10 +598,10 @@ local function attach(win, opt)
     })
 
     -- Build config section
-    SaveManager:BuildConfigSection(settingsRight)
+    SaveManager:BuildConfigSection(settingsTab)
     
     -- Build theme section  
-    ThemeManager:ApplyToGroupbox(settingsLeft)
+    ThemeManager:ApplyToTab(settingsTab)
 
     local function render_reply(text)
         local i = 1
