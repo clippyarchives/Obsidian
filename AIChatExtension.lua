@@ -41,12 +41,26 @@ local function add_code_block(gui, code)
     return t
 end
 
--- snapshot that ALWAYS traverses; only adds lines when filters match
-local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classFilter, nameFilter, path)
+-- snapshot that ALWAYS traverses; only adds lines when filters match; supports multi filters
+local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classList, nameList, path)
     if #lines >= maxLines then return end
 
-    local classOk = (not classFilter) or inst:IsA(classFilter) or inst.ClassName == classFilter
-    local nameOk = (not nameFilter) or tostring(inst.Name):lower():find(nameFilter, 1, true)
+    local classOk = true
+    if classList and #classList > 0 then
+        classOk = false
+        for _,cls in ipairs(classList) do
+            if inst:IsA(cls) or inst.ClassName == cls then classOk = true break end
+        end
+    end
+
+    local nameOk = true
+    if nameList and #nameList > 0 then
+        nameOk = false
+        local lower = tostring(inst.Name):lower()
+        for _,frag in ipairs(nameList) do
+            if lower:find(frag, 1, true) then nameOk = true break end
+        end
+    end
 
     if classOk and nameOk then
         local line = (path or inst.Name).." ("..inst.ClassName..")"
@@ -65,8 +79,18 @@ local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, class
     for _,c in ipairs(inst:GetChildren()) do
         if #lines >= maxLines then break end
         local childPath = (path and (path.."."..c.Name)) or c.Name
-        snapshot_instance(c, depth+1, lines, depthLimit, maxLines, classFilter, nameFilter, childPath)
+        snapshot_instance(c, depth+1, lines, depthLimit, maxLines, classList, nameList, childPath)
     end
+end
+
+local function parse_list(s)
+    local out = {}
+    if not s then return out end
+    for token in string.gmatch(s, "[^,]+") do
+        token = token:gsub("^%s+", ""):gsub("%s+$", "")
+        if token ~= "" then table.insert(out, token) end
+    end
+    return out
 end
 
 local function build_service_context(selected, filter)
@@ -75,7 +99,7 @@ local function build_service_context(selected, filter)
         if enabled then
             local ok, svc = pcall(function() return game:GetService(svcName) end)
             if ok and svc then
-                snapshot_instance(svc, 0, blockLines, 4, 800, filter.class, filter.name, string.lower(svc.Name))
+                snapshot_instance(svc, 0, blockLines, 4, 800, filter.classes, filter.names, string.lower(svc.Name))
             end
         end
     end
@@ -96,7 +120,7 @@ local function attach(win, opt)
 
     local scripts = {}
     local services_selected = {}
-    local filter = { class = nil, name = nil }
+    local filter = { classes = {}, names = {} }
 
     local function build_messages()
         local m = {}
@@ -110,7 +134,8 @@ local function attach(win, opt)
 
     local function insert_code(src)
         if ide and ide.GetText and ide.SetText then
-            ide:SetText((ide:GetText() or "") .. ((ide:GetText() and #ide:GetText()>0) and "\n" or "") .. src)
+            local cur = ide:GetText() or ""
+            ide:SetText((#cur>0 and (cur.."\n") or "") .. src)
             lib:Notify("added to ide",2)
         elseif typeof(getgenv().obs_ide_insert)=="function" then
             getgenv().obs_ide_insert(src)
@@ -269,26 +294,20 @@ local function attach(win, opt)
         preview:SetText(ctx == "" and "no services selected" or ctx)
     end
 
-    -- filters
-    svcBoxRight:AddInput("svc_class", {
-        Text = "Class Filter (e.g. Model, Part)";
-        Default = "";
-        Finished = true;
-        Callback = function(v)
-            v = v and v:gsub("%s+", "")
-            filter.class = (v ~= "" and v) or nil
-            update_preview()
-        end
-    })
-    svcBoxRight:AddInput("svc_name", {
-        Text = "Name Contains";
-        Default = "";
-        Finished = true;
-        Callback = function(v)
-            filter.name = (v and v ~= "" and v:lower()) or nil
-            update_preview()
-        end
-    })
+    -- filters UI
+    local classInput = svcBoxRight:AddInput("svc_classes", { Text = "Class Filter(s) e.g. Model, Part"; Default = ""; Finished = true; ClearTextOnFocus = false; Callback = function(v) end })
+    local nameInput = svcBoxRight:AddInput("svc_names", { Text = "Name Contains (comma list)"; Default = ""; Finished = true; ClearTextOnFocus = false; Callback = function(v) end })
+
+    classInput:OnChanged(function(v)
+        filter.classes = parse_list(v)
+        update_preview()
+    end)
+    nameInput:OnChanged(function(v)
+        local lst = parse_list(v)
+        for i=1,#lst do lst[i] = lst[i]:lower() end
+        filter.names = lst
+        update_preview()
+    end)
 
     for _, svc in ipairs(game:GetChildren()) do
         local name = svc.ClassName
