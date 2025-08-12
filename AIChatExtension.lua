@@ -279,27 +279,7 @@ local function attach(win, opt)
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then add_lbl(box, pre) end
-            -- chat view: render code as label (no insert action here)
-            local chatlbl = Instance.new("TextLabel")
-            chatlbl.BackgroundColor3 = lib.Scheme.MainColor
-            chatlbl.BorderColor3 = lib.Scheme.OutlineColor
-            chatlbl.TextXAlignment = Enum.TextXAlignment.Left
-            chatlbl.TextYAlignment = Enum.TextYAlignment.Top
-            chatlbl.TextWrapped = true
-            chatlbl.FontFace = lib.Scheme.Font
-            chatlbl.TextSize = 14
-            chatlbl.TextColor3 = lib.Scheme.FontColor
-            chatlbl.AutomaticSize = Enum.AutomaticSize.Y
-            chatlbl.Size = UDim2.new(1,-12,0,0)
-            chatlbl.Parent = box
-            local pad = Instance.new("UIPadding")
-            pad.PaddingLeft = UDim.new(0,8)
-            pad.PaddingRight = UDim.new(0,8)
-            pad.PaddingTop = UDim.new(0,6)
-            pad.PaddingBottom = UDim.new(0,6)
-            pad.Parent = chatlbl
-            add_code_block(chatlbl, seg)
-            -- always save to scripts tab for insertion there
+            -- do not render the code block in chat; only save to scripts tab
             add_script(seg)
             i = b + 1
         end
