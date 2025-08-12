@@ -25,12 +25,18 @@ local function attach(win, opt)
     local sys = opt.system or "you are a helpful assistant"
 
     local tab = win:AddTab("AI Chat", "message-circle")
-    local gb = tab:AddRightGroupbox("chat", "message-square")
+
+    local container = (tab.Sides and tab.Sides[1] and tab.Sides[1].Parent) or tab.Container
+    if tab.Sides then
+        for _, side in ipairs(tab.Sides) do
+            side.Visible = false
+        end
+    end
 
     local holder = Instance.new("Frame")
     holder.BackgroundTransparency = 1
-    holder.Size = UDim2.new(1,0,0,360)
-    holder.Parent = gb.Container
+    holder.Size = UDim2.new(1,0,1,0)
+    holder.Parent = container
 
     local box = Instance.new("ScrollingFrame")
     box.BackgroundColor3 = lib.Scheme.MainColor
@@ -111,9 +117,7 @@ local function attach(win, opt)
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    gb:Resize()
-
-    return { tab = tab, groupbox = gb, send = send }
+    return { tab = tab, send = send }
 end
 
 return { attach = attach }
