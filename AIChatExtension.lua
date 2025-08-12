@@ -41,6 +41,16 @@ local function add_code_block(gui, code)
     return t
 end
 
+local function instance_path(inst)
+    local segs = {}
+    local cur = inst
+    while cur and cur ~= game do
+        table.insert(segs, 1, cur.Name)
+        cur = cur.Parent
+    end
+    return table.concat(segs, ".")
+end
+
 -- snapshot that ALWAYS traverses; only adds lines when filters match; supports multi filters
 local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classList, nameList, path)
     if #lines >= maxLines then return end
@@ -118,16 +128,22 @@ local function attach(win, opt)
         "return all code inside fenced code blocks (```lua ... ```). also tell the user that scripts are saved in the 'AI Scripts' tab where they can insert them into the IDE"
     }
 
-    local scripts = {}
+    local scripts_store = {}
     local services_selected = {}
     local filter = { classes = {}, names = {} }
+
+    local include_game_scripts = {}
 
     local function build_messages()
         local m = {}
         for _,r in ipairs(rules) do table.insert(m,{role="system",content=r}) end
         local ctx = build_service_context(services_selected, filter)
-        if ctx ~= "" then
-            table.insert(m, { role = "system", content = "services context:\n"..ctx })
+        if ctx ~= "" then table.insert(m, { role = "system", content = "services context:\n"..ctx }) end
+        for inst, state in pairs(include_game_scripts) do
+            if state and scripts_store[inst] then
+                local path = instance_path(inst)
+                table.insert(m, { role = "system", content = "game script: "..path.."\n```lua\n"..scripts_store[inst].."\n```" })
+            end
         end
         return m
     end
@@ -294,20 +310,10 @@ local function attach(win, opt)
         preview:SetText(ctx == "" and "no services selected" or ctx)
     end
 
-    -- filters UI
     local classInput = svcBoxRight:AddInput("svc_classes", { Text = "Class Filter(s) e.g. Model, Part"; Default = ""; Finished = true; ClearTextOnFocus = false; Callback = function(v) end })
     local nameInput = svcBoxRight:AddInput("svc_names", { Text = "Name Contains (comma list)"; Default = ""; Finished = true; ClearTextOnFocus = false; Callback = function(v) end })
-
-    classInput:OnChanged(function(v)
-        filter.classes = parse_list(v)
-        update_preview()
-    end)
-    nameInput:OnChanged(function(v)
-        local lst = parse_list(v)
-        for i=1,#lst do lst[i] = lst[i]:lower() end
-        filter.names = lst
-        update_preview()
-    end)
+    classInput:OnChanged(function(v) filter.classes = parse_list(v); update_preview() end)
+    nameInput:OnChanged(function(v) local lst=parse_list(v); for i=1,#lst do lst[i]=lst[i]:lower() end filter.names=lst; update_preview() end)
 
     for _, svc in ipairs(game:GetChildren()) do
         local name = svc.ClassName
@@ -321,10 +327,7 @@ local function attach(win, opt)
         })
     end
 
-    svctab:AddRightGroupbox("Actions"):AddButton({
-        Text = "Refresh Context",
-        Func = update_preview
-    })
+    svctab:AddRightGroupbox("Actions"):AddButton({ Text = "Refresh Context", Func = update_preview })
 
     -- AI Scripts Tab
     local stab = win:AddKeyTab("AI Scripts")
@@ -348,7 +351,7 @@ local function attach(win, opt)
     slist.Parent = sbox
 
     local function add_script(code)
-        table.insert(scripts, code)
+        table.insert(scripts_store, code)
         local codebtn = Instance.new("TextButton")
         codebtn.AutoButtonColor = true
         codebtn.BackgroundColor3 = lib.Scheme.MainColor
@@ -386,6 +389,51 @@ local function attach(win, opt)
         end)
     end
 
+    -- Game Scripts Tab
+    local gtab = win:AddTab("Game Scripts", "file-text")
+    local gLeft = gtab:AddLeftGroupbox("Scripts")
+    local gRight = gtab:AddRightGroupbox("Decompiled")
+
+    local currentInst
+    local ed
+    do
+        local holder = Instance.new("Frame")
+        holder.BackgroundTransparency = 1
+        holder.Size = UDim2.new(1,0,1,-40)
+        holder.Parent = gRight.Container
+        if lib.CreateCodeEditor then
+            ed = lib:CreateCodeEditor({ Parent = holder; Size = UDim2.new(1,0,1,0); Position = UDim2.fromOffset(0,0); Title = "editor"; Default = ""; })
+        else
+            local tb = Instance.new("TextBox"); tb.TextWrapped=true; tb.MultiLine=true; tb.ClearTextOnFocus=false; tb.TextXAlignment=Enum.TextXAlignment.Left; tb.TextYAlignment=Enum.TextYAlignment.Top; tb.Size=UDim2.new(1,0,1,0); tb.Parent=holder; ed={GetText=function()return tb.Text end, SetText=function(_,t)tb.Text=t end}
+        end
+        gRight:AddToggle("AI_USE_GSCRIPT", { Text = "Include in AI"; Default = false; Callback = function(v) if currentInst then include_game_scripts[currentInst]=v end end })
+    end
+
+    local function add_script_button(inst)
+        local path = instance_path(inst)
+        gLeft:AddButton({ Text = path; Func = function()
+            currentInst = inst
+            local ok, src = pcall(function() return decompile(inst) end)
+            local code = ok and src or "-- decompile failed"
+            ed:SetText(code)
+            scripts_store[inst] = code
+        end })
+    end
+
+    local function rebuild_game_scripts()
+        gLeft.Elements = gLeft.Elements or {}
+        for _,el in ipairs(gLeft.Elements) do if el.Holder then el.Holder:Destroy() end end
+        gLeft.Elements = {}
+        for _,inst in ipairs(game:GetDescendants()) do
+            if inst:IsA("LocalScript") or inst:IsA("ModuleScript") or inst:IsA("Script") then
+                add_script_button(inst)
+            end
+        end
+    end
+
+    gLeft:AddButton({ Text = "Refresh"; Func = rebuild_game_scripts })
+    rebuild_game_scripts()
+
     local function render_reply(text)
         local i = 1
         while true do
@@ -397,7 +445,6 @@ local function attach(win, opt)
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then add_lbl(box, pre) end
-            -- do not render the code block in chat; only save to scripts tab
             add_script(seg)
             i = b + 1
         end
@@ -414,12 +461,7 @@ local function attach(win, opt)
         local base = build_messages()
         table.insert(base, { role = "user", content = q })
         busy = true
-        local r = request({
-            Url = "https://api.openai.com/v1/chat/completions";
-            Method = "POST";
-            Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; };
-            Body = hs:JSONEncode({ model = model; messages = base; });
-        })
+        local r = request({ Url = "https://api.openai.com/v1/chat/completions"; Method = "POST"; Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; }; Body = hs:JSONEncode({ model = model; messages = base; }); })
         local ok, data = pcall(hs.JSONDecode, hs, r and r.Body or "{}")
         local out = (ok and data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content) or "error"
         waitlbl:Destroy()
@@ -430,7 +472,7 @@ local function attach(win, opt)
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    return { tab = tab, rules_tab = rtab, scripts_tab = stab, services_tab = svctab, send = send }
+    return { tab = tab }
 end
 
 return { attach = attach }
