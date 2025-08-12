@@ -3,10 +3,16 @@ if not lib then error("load Library.lua first") end
 
 local hs = game:GetService("HttpService")
 
-local function add_msg(parent, txt)
+local synx
+pcall(function()
+    synx = loadstring(game:HttpGet("https://raw.githubusercontent.com/clippyarchives/Obsidian/feature/ide-extension/IDESyntaxExtension.lua"))()
+end)
+
+local function add_lbl(parent, txt)
     local l = Instance.new("TextLabel")
     l.BackgroundColor3 = lib.Scheme.BackgroundColor
     l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextYAlignment = Enum.TextYAlignment.Top
     l.TextWrapped = true
     l.FontFace = lib.Scheme.Font
     l.TextSize = 14
@@ -18,11 +24,65 @@ local function add_msg(parent, txt)
     return l
 end
 
+local function add_code(parent, code, onadd)
+    local b = Instance.new("TextButton")
+    b.AutoButtonColor = true
+    b.BackgroundColor3 = lib.Scheme.MainColor
+    b.BorderColor3 = lib.Scheme.OutlineColor
+    b.TextXAlignment = Enum.TextXAlignment.Left
+    b.TextYAlignment = Enum.TextYAlignment.Top
+    b.TextWrapped = true
+    b.RichText = true
+    b.FontFace = lib.Scheme.Font
+    b.TextSize = 14
+    b.TextColor3 = lib.Scheme.FontColor
+    b.AutomaticSize = Enum.AutomaticSize.Y
+    b.Size = UDim2.new(1,-12,0,0)
+    b.Parent = parent
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingLeft = UDim.new(0,8)
+    pad.PaddingRight = UDim.new(0,8)
+    pad.PaddingTop = UDim.new(0,6)
+    pad.PaddingBottom = UDim.new(0,6)
+    pad.Parent = b
+
+    local t = code:gsub("\r","")
+    local first = t:match("^%s*([%w%-_]*)\n")
+    if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
+        t = t:gsub("^%s*[%w%-_]*\n", "", 1)
+    end
+    if synx and synx.syn and synx.syn.hl then
+        b.Text = synx.syn.hl(t)
+    else
+        b.RichText = false
+        b.Text = t
+    end
+    b.MouseButton1Click:Connect(function()
+        onadd(t)
+    end)
+    return b
+end
+
 local function attach(win, opt)
     opt = opt or {}
     local key = opt.key or ""
     local model = opt.model or "gpt-5"
     local sys = opt.system or "you are a helpful assistant"
+    local ide = opt.ide
+
+    local function insert_code(src)
+        if ide and ide.GetText and ide.SetText then
+            ide:SetText((ide:GetText() or "") .. ( (#ide:GetText()>0 and "\n" or "") ) .. src)
+            lib:Notify("added to ide",2)
+        elseif typeof(getgenv().obs_ide_insert)=="function" then
+            getgenv().obs_ide_insert(src)
+            lib:Notify("sent to ide",2)
+        elseif setclipboard then
+            setclipboard(src)
+            lib:Notify("copied",2)
+        end
+    end
 
     local tab = win:AddKeyTab("AI Chat")
 
@@ -81,28 +141,42 @@ local function attach(win, opt)
 
     local msgs = { { role = "system", content = sys } }
 
+    local function render_reply(text)
+        local i = 1
+        while true do
+            local a,b,seg = text:find("```(.-)```", i)
+            if not a then
+                local tail = text:sub(i)
+                if tail ~= "" then add_lbl(box, tail) end
+                break
+            end
+            local pre = text:sub(i, a-1)
+            if pre ~= "" then add_lbl(box, pre) end
+            add_code(box, seg, insert_code)
+            i = b + 1
+        end
+    end
+
     local busy = false
     local function send()
         if busy then return end
         local q = inp.Text
         if q == "" then return end
         inp.Text = ""
-        add_msg(box, "> "..q)
-        local waitlbl = add_msg(box, "...")
+        add_lbl(box, "> "..q)
+        local waitlbl = add_lbl(box, "...")
         table.insert(msgs, { role = "user", content = q })
         busy = true
         local r = request({
             Url = "https://api.openai.com/v1/chat/completions";
             Method = "POST";
-            Headers = {
-                ["Content-Type"] = "application/json";
-                ["Authorization"] = "Bearer "..key;
-            };
+            Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; };
             Body = hs:JSONEncode({ model = model; messages = msgs; });
         })
         local ok, data = pcall(hs.JSONDecode, hs, r and r.Body or "{}")
         local out = (ok and data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content) or "error"
-        waitlbl.Text = out
+        waitlbl:Destroy()
+        render_reply(out)
         table.insert(msgs, { role = "assistant", content = out })
         busy = false
     end
