@@ -3,23 +3,40 @@
 local lib = getgenv().Library
 if not lib then error("Library not found! Load Library.lua first.") end
 
+local TextService = game:GetService("TextService")
+
 local editors = {}
 
 local function maketext(parent, text)
-    local f = Instance.new("Frame")
-    f.BackgroundColor3 = lib.Scheme.MainColor
-    f.BackgroundTransparency = 0
-    f.Size = UDim2.new(1, 0, 1, -54)
-    f.Position = UDim2.fromOffset(0, 24)
-    f.Parent = parent
+    local holder = Instance.new("Frame")
+    holder.BackgroundColor3 = lib.Scheme.MainColor
+    holder.BackgroundTransparency = 0
+    holder.Size = UDim2.new(1, 0, 1, -54)
+    holder.Position = UDim2.fromOffset(0, 24)
+    holder.Parent = parent
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, lib.CornerRadius or 4)
-    corner.Parent = f
+    corner.Parent = holder
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = lib.Scheme.OutlineColor
-    stroke.Parent = f
+    stroke.Parent = holder
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.BackgroundTransparency = 1
+    scroll.Size = UDim2.fromScale(1, 1)
+    scroll.CanvasSize = UDim2.fromOffset(0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+    scroll.ScrollBarThickness = 2
+    scroll.Parent = holder
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 8)
+    pad.PaddingBottom = UDim.new(0, 8)
+    pad.PaddingLeft = UDim.new(0, 8)
+    pad.PaddingRight = UDim.new(0, 8)
+    pad.Parent = scroll
 
     local tb = Instance.new("TextBox")
     tb.RichText = false
@@ -29,21 +46,32 @@ local function maketext(parent, text)
     tb.TextYAlignment = Enum.TextYAlignment.Top
     tb.BackgroundTransparency = 1
     tb.TextEditable = true
+    tb.TextWrapped = true
     tb.Text = text or ""
     tb.FontFace = lib.Scheme.Font or Font.fromEnum(Enum.Font.Code)
     tb.TextSize = 14
     tb.TextColor3 = lib.Scheme.FontColor
-    tb.Size = UDim2.fromScale(1, 1)
-    tb.Parent = f
+    tb.Size = UDim2.new(1, 0, 0, 0)
+    tb.Parent = scroll
 
-    local pad = Instance.new("UIPadding")
-    pad.PaddingTop = UDim.new(0, 8)
-    pad.PaddingBottom = UDim.new(0, 8)
-    pad.PaddingLeft = UDim.new(0, 8)
-    pad.PaddingRight = UDim.new(0, 8)
-    pad.Parent = f
+    local function updateCanvas()
+        local width = math.max(1, scroll.AbsoluteSize.X - (pad.PaddingLeft.Offset + pad.PaddingRight.Offset))
+        local params = Instance.new("GetTextBoundsParams")
+        params.Text = (tb.Text == "" and " " or tb.Text)
+        params.RichText = false
+        params.Font = tb.FontFace
+        params.Size = tb.TextSize
+        params.Width = width
+        local bounds = TextService:GetTextBoundsAsync(params)
+        tb.Size = UDim2.new(1, 0, 0, bounds.Y)
+        scroll.CanvasSize = UDim2.fromOffset(0, bounds.Y + pad.PaddingTop.Offset + pad.PaddingBottom.Offset)
+    end
 
-    return f, tb
+    updateCanvas()
+    tb:GetPropertyChangedSignal("Text"):Connect(updateCanvas)
+    scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCanvas)
+
+    return holder, scroll, tb, updateCanvas
 end
 
 function lib:CreateCodeEditor(info)
@@ -73,7 +101,7 @@ function lib:CreateCodeEditor(info)
     title.Size = UDim2.new(1, 0, 0, 20)
     title.Parent = holder
 
-    local editor_frame, textbox = maketext(holder, value)
+    local editor_frame, scroll, textbox, updateCanvas = maketext(holder, value)
     textbox.TextEditable = not readonly
 
     local btnbar = Instance.new("Frame")
@@ -118,10 +146,10 @@ function lib:CreateCodeEditor(info)
 
     local ed = { Holder = holder, TextBox = textbox, Title = title, Type = "CodeEditor", Visible = visible }
 
-    function ed:SetText(t) textbox.Text = t or "" end
+    function ed:SetText(t) textbox.Text = t or ""; updateCanvas() end
     function ed:GetText() return textbox.Text end
     function ed:SetVisible(v) self.Visible = v; holder.Visible = v end
-    function ed:SetSize(s) holder.Size = s end
+    function ed:SetSize(s) holder.Size = s; updateCanvas() end
     function ed:SetPosition(p) holder.Position = p end
     function ed:SetReadOnly(v) textbox.TextEditable = not v end
     function ed:Destroy() editors[self] = nil; holder:Destroy() end
@@ -142,7 +170,7 @@ function lib:CreateCodeEditor(info)
     end)
 
     mkbtn("load", function()
-        if readfile and isfile and isfile(path) then local c = readfile(path); textbox.Text = c or ""; lib:Notify("loaded: " .. path, 3) else lib:Notify("no file: " .. path, 3) end
+        if readfile and isfile and isfile(path) then local c = readfile(path); textbox.Text = c or ""; updateCanvas(); lib:Notify("loaded: " .. path, 3) else lib:Notify("no file: " .. path, 3) end
     end)
 
     editors[ed] = true
