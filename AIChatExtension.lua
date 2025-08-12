@@ -24,12 +24,13 @@ local function attach(win, opt)
     local model = opt.model or "gpt-5"
     local sys = opt.system or "you are a helpful assistant"
 
-    local tab = win:AddKeyTab("AI Chat")
+    local tab = win:AddTab("AI Chat", "message-circle")
+    local gb = tab:AddRightGroupbox("chat", "message-square")
 
-    local root = Instance.new("Frame")
-    root.BackgroundTransparency = 1
-    root.Size = UDim2.new(1,0,1,0)
-    root.Parent = tab.Container
+    local holder = Instance.new("Frame")
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(1,0,0,360)
+    holder.Parent = gb.Container
 
     local box = Instance.new("ScrollingFrame")
     box.BackgroundColor3 = lib.Scheme.MainColor
@@ -37,9 +38,9 @@ local function attach(win, opt)
     box.AutomaticCanvasSize = Enum.AutomaticSize.Y
     box.CanvasSize = UDim2.fromOffset(0,0)
     box.ScrollBarThickness = 2
-    box.Size = UDim2.new(1,-12,1,-60)
+    box.Size = UDim2.new(1,-12,1,-66)
     box.Position = UDim2.fromOffset(6,6)
-    box.Parent = root
+    box.Parent = holder
 
     local list = Instance.new("UIListLayout")
     list.Padding = UDim.new(0,6)
@@ -49,7 +50,7 @@ local function attach(win, opt)
     row.BackgroundTransparency = 1
     row.Size = UDim2.new(1,-12,0,44)
     row.Position = UDim2.new(0,6,1,-50)
-    row.Parent = root
+    row.Parent = holder
 
     local inp = Instance.new("TextBox")
     inp.BackgroundColor3 = lib.Scheme.MainColor
@@ -110,7 +111,9 @@ local function attach(win, opt)
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    return { tab = tab, send = send }
+    gb:Resize()
+
+    return { tab = tab, groupbox = gb, send = send }
 end
 
 return { attach = attach }
