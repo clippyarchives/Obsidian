@@ -2,6 +2,7 @@ local lib = getgenv().Library
 if not lib then error("load Library.lua first") end
 
 local hs = game:GetService("HttpService")
+local TextService = game:GetService("TextService")
 
 local synx
 pcall(function()
@@ -40,6 +41,40 @@ local function add_code_block(gui, code)
     return t
 end
 
+local function snapshot_instance(inst, depth, lines, depthLimit, maxLines)
+    if #lines >= maxLines then return end
+    local indent = string.rep("  ", depth)
+    local line = indent..inst.Name.." ("..inst.ClassName..")"
+    if inst:IsA("BasePart") then
+        local p = inst.Position
+        local s = inst.Size
+        line = line..string.format(" pos=(%.1f,%.1f,%.1f) size=(%.1f,%.1f,%.1f)", p.X,p.Y,p.Z, s.X,s.Y,s.Z)
+    elseif inst:IsA("ValueBase") then
+        local ok,val = pcall(function() return inst.Value end)
+        if ok and val ~= nil then line = line.." value="..tostring(val) end
+    end
+    table.insert(lines, line)
+    if depth >= depthLimit then return end
+    for _,c in ipairs(inst:GetChildren()) do
+        if #lines >= maxLines then break end
+        snapshot_instance(c, depth+1, lines, depthLimit, maxLines)
+    end
+end
+
+local function build_service_context(selected)
+    local blockLines = {}
+    for svcName, enabled in pairs(selected) do
+        if enabled then
+            local ok, svc = pcall(function() return game:GetService(svcName) end)
+            if ok and svc then
+                table.insert(blockLines, ("-- %s"):format(svcName))
+                snapshot_instance(svc, 0, blockLines, 3, 400)
+            end
+        end
+    end
+    return table.concat(blockLines, "\n")
+end
+
 local function attach(win, opt)
     opt = opt or {}
     local key = opt.key or ""
@@ -53,10 +88,15 @@ local function attach(win, opt)
     }
 
     local scripts = {}
+    local services_selected = {}
 
     local function build_messages()
         local m = {}
         for _,r in ipairs(rules) do table.insert(m,{role="system",content=r}) end
+        local ctx = build_service_context(services_selected)
+        if ctx ~= "" then
+            table.insert(m, { role = "system", content = "services context:\n"..ctx })
+        end
         return m
     end
 
@@ -209,6 +249,36 @@ local function attach(win, opt)
 
     refresh_rules()
 
+    -- Services Tab
+    local svctab = win:AddTab("Services", "server")
+    local svcBoxLeft = svctab:AddLeftGroupbox("Services")
+    local svcBoxRight = svctab:AddRightGroupbox("Selected Context")
+
+    local preview = svcBoxRight:AddLabel({ Text = "", DoesWrap = true })
+
+    local function update_preview()
+        local ctx = build_service_context(services_selected)
+        preview:SetText(ctx == "" and "no services selected" or ctx)
+    end
+
+    for _, svc in ipairs(game:GetChildren()) do
+        local name = svc.ClassName
+        svcBoxLeft:AddToggle("AI_SVC_"..name, {
+            Text = name,
+            Default = false,
+            Callback = function(v)
+                services_selected[name] = v or nil
+                update_preview()
+            end
+        })
+    end
+
+    svctab:AddRightGroupbox("Actions"):AddButton({
+        Text = "Refresh Context",
+        Func = update_preview
+    })
+
+    -- AI Scripts Tab
     local stab = win:AddKeyTab("AI Scripts")
     local sh = Instance.new("Frame")
     sh.BackgroundTransparency = 1
@@ -312,7 +382,7 @@ local function attach(win, opt)
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    return { tab = tab, rules_tab = rtab, scripts_tab = stab, send = send, add_rule = function(t) table.insert(rules,t); refresh_rules() end }
+    return { tab = tab, rules_tab = rtab, scripts_tab = stab, services_tab = svctab, send = send }
 end
 
 return { attach = attach }
