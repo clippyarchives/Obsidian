@@ -24,44 +24,20 @@ local function add_lbl(parent, txt)
     return l
 end
 
-local function add_code(parent, code, onadd)
-    local b = Instance.new("TextButton")
-    b.AutoButtonColor = true
-    b.BackgroundColor3 = lib.Scheme.MainColor
-    b.BorderColor3 = lib.Scheme.OutlineColor
-    b.TextXAlignment = Enum.TextXAlignment.Left
-    b.TextYAlignment = Enum.TextYAlignment.Top
-    b.TextWrapped = true
-    b.RichText = true
-    b.FontFace = lib.Scheme.Font
-    b.TextSize = 14
-    b.TextColor3 = lib.Scheme.FontColor
-    b.AutomaticSize = Enum.AutomaticSize.Y
-    b.Size = UDim2.new(1,-12,0,0)
-    b.Parent = parent
-
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft = UDim.new(0,8)
-    pad.PaddingRight = UDim.new(0,8)
-    pad.PaddingTop = UDim.new(0,6)
-    pad.PaddingBottom = UDim.new(0,6)
-    pad.Parent = b
-
+local function add_code_block(btn, code)
     local t = code:gsub("\r","")
     local first = t:match("^%s*([%w%-_]*)\n")
     if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
         t = t:gsub("^%s*[%w%-_]*\n", "", 1)
     end
     if synx and synx.syn and synx.syn.hl then
-        b.Text = synx.syn.hl(t)
+        btn.Text = synx.syn.hl(t)
+        btn.RichText = true
     else
-        b.RichText = false
-        b.Text = t
+        btn.Text = t
+        btn.RichText = false
     end
-    b.MouseButton1Click:Connect(function()
-        onadd(t)
-    end)
-    return b
+    return t
 end
 
 local function attach(win, opt)
@@ -71,7 +47,12 @@ local function attach(win, opt)
     local sys = opt.system or "you are a helpful assistant"
     local ide = opt.ide
 
-    local rules = { sys }
+    local rules = {
+        sys,
+        "return all code inside fenced code blocks (```lua ... ```). also tell the user that scripts are saved in the 'AI Scripts' tab where they can insert them into the IDE"
+    }
+
+    local scripts = {}
 
     local function build_messages()
         local m = {}
@@ -81,7 +62,7 @@ local function attach(win, opt)
 
     local function insert_code(src)
         if ide and ide.GetText and ide.SetText then
-            ide:SetText((ide:GetText() or "") .. ( (#ide:GetText()>0 and "\n" or "") ) .. src)
+            ide:SetText((ide:GetText() or "") .. ((ide:GetText() and #ide:GetText()>0) and "\n" or "") .. src)
             lib:Notify("added to ide",2)
         elseif typeof(getgenv().obs_ide_insert)=="function" then
             getgenv().obs_ide_insert(src)
@@ -147,7 +128,6 @@ local function attach(win, opt)
     btn.Position = UDim2.new(1,-96,0,0)
     btn.Parent = row
 
-    -- Rules tab
     local rtab = win:AddKeyTab("AI Rules")
     local rh = Instance.new("Frame")
     rh.BackgroundTransparency = 1
@@ -229,6 +209,65 @@ local function attach(win, opt)
 
     refresh_rules()
 
+    local stab = win:AddKeyTab("AI Scripts")
+    local sh = Instance.new("Frame")
+    sh.BackgroundTransparency = 1
+    sh.Size = UDim2.new(1,0,1,0)
+    sh.Parent = stab.Container
+
+    local sbox = Instance.new("ScrollingFrame")
+    sbox.BackgroundColor3 = lib.Scheme.MainColor
+    sbox.BorderColor3 = lib.Scheme.OutlineColor
+    sbox.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    sbox.CanvasSize = UDim2.fromOffset(0,0)
+    sbox.ScrollBarThickness = 2
+    sbox.Size = UDim2.new(1,-12,1,-12)
+    sbox.Position = UDim2.fromOffset(6,6)
+    sbox.Parent = sh
+
+    local slist = Instance.new("UIListLayout")
+    slist.Padding = UDim.new(0,8)
+    slist.Parent = sbox
+
+    local function add_script(code)
+        table.insert(scripts, code)
+        local codebtn = Instance.new("TextButton")
+        codebtn.AutoButtonColor = true
+        codebtn.BackgroundColor3 = lib.Scheme.MainColor
+        codebtn.BorderColor3 = lib.Scheme.OutlineColor
+        codebtn.TextXAlignment = Enum.TextXAlignment.Left
+        codebtn.TextYAlignment = Enum.TextYAlignment.Top
+        codebtn.TextWrapped = true
+        codebtn.FontFace = lib.Scheme.Font
+        codebtn.TextSize = 14
+        codebtn.TextColor3 = lib.Scheme.FontColor
+        codebtn.AutomaticSize = Enum.AutomaticSize.Y
+        codebtn.Size = UDim2.new(1,-12,0,0)
+        codebtn.Parent = sbox
+        local pad = Instance.new("UIPadding")
+        pad.PaddingLeft = UDim.new(0,8)
+        pad.PaddingRight = UDim.new(0,8)
+        pad.PaddingTop = UDim.new(0,6)
+        pad.PaddingBottom = UDim.new(0,6)
+        pad.Parent = codebtn
+        local norm = add_code_block(codebtn, code)
+        codebtn.MouseButton1Click:Connect(function()
+            insert_code(norm)
+        end)
+        local ins = Instance.new("TextButton")
+        ins.BackgroundColor3 = lib.Scheme.MainColor
+        ins.BorderColor3 = lib.Scheme.OutlineColor
+        ins.Text = "insert"
+        ins.FontFace = lib.Scheme.Font
+        ins.TextSize = 14
+        ins.TextColor3 = lib.Scheme.FontColor
+        ins.Size = UDim2.new(0,96,0,28)
+        ins.Parent = sbox
+        ins.MouseButton1Click:Connect(function()
+            insert_code(norm)
+        end)
+    end
+
     local function render_reply(text)
         local i = 1
         while true do
@@ -240,7 +279,30 @@ local function attach(win, opt)
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then add_lbl(box, pre) end
-            add_code(box, seg, insert_code)
+            local chatbtn = Instance.new("TextButton")
+            chatbtn.AutoButtonColor = true
+            chatbtn.BackgroundColor3 = lib.Scheme.MainColor
+            chatbtn.BorderColor3 = lib.Scheme.OutlineColor
+            chatbtn.TextXAlignment = Enum.TextXAlignment.Left
+            chatbtn.TextYAlignment = Enum.TextYAlignment.Top
+            chatbtn.TextWrapped = true
+            chatbtn.FontFace = lib.Scheme.Font
+            chatbtn.TextSize = 14
+            chatbtn.TextColor3 = lib.Scheme.FontColor
+            chatbtn.AutomaticSize = Enum.AutomaticSize.Y
+            chatbtn.Size = UDim2.new(1,-12,0,0)
+            chatbtn.Parent = box
+            local pad = Instance.new("UIPadding")
+            pad.PaddingLeft = UDim.new(0,8)
+            pad.PaddingRight = UDim.new(0,8)
+            pad.PaddingTop = UDim.new(0,6)
+            pad.PaddingBottom = UDim.new(0,6)
+            pad.Parent = chatbtn
+            local norm = add_code_block(chatbtn, seg)
+            chatbtn.MouseButton1Click:Connect(function()
+                insert_code(norm)
+            end)
+            add_script(seg)
             i = b + 1
         end
     end
@@ -266,14 +328,13 @@ local function attach(win, opt)
         local out = (ok and data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content) or "error"
         waitlbl:Destroy()
         render_reply(out)
-        table.insert(rules, sys) -- keep original
         busy = false
     end
 
     btn.MouseButton1Click:Connect(send)
     inp.FocusLost:Connect(function(enter) if enter then send() end end)
 
-    return { tab = tab, rules_tab = rtab, send = send, add_rule = function(t) table.insert(rules,t); refresh_rules() end }
+    return { tab = tab, rules_tab = rtab, scripts_tab = stab, send = send, add_rule = function(t) table.insert(rules,t); refresh_rules() end }
 end
 
 return { attach = attach }
