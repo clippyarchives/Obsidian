@@ -41,25 +41,31 @@ local function add_code_block(gui, code)
     return t
 end
 
-local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classFilter, nameFilter)
+-- snapshot that ALWAYS traverses; only adds lines when filters match
+local function snapshot_instance(inst, depth, lines, depthLimit, maxLines, classFilter, nameFilter, path)
     if #lines >= maxLines then return end
-    if classFilter and inst.ClassName ~= classFilter then return end
-    if nameFilter and not tostring(inst.Name):lower():find(nameFilter) then return end
-    local indent = string.rep("  ", depth)
-    local line = indent..inst.Name.." ("..inst.ClassName..")"
-    if inst:IsA("BasePart") then
-        local p = inst.Position
-        local s = inst.Size
-        line = line..string.format(" pos=(%.1f,%.1f,%.1f) size=(%.1f,%.1f,%.1f)", p.X,p.Y,p.Z, s.X,s.Y,s.Z)
-    elseif inst:IsA("ValueBase") then
-        local ok,val = pcall(function() return inst.Value end)
-        if ok and val ~= nil then line = line.." value="..tostring(val) end
+
+    local classOk = (not classFilter) or inst:IsA(classFilter) or inst.ClassName == classFilter
+    local nameOk = (not nameFilter) or tostring(inst.Name):lower():find(nameFilter, 1, true)
+
+    if classOk and nameOk then
+        local line = (path or inst.Name).." ("..inst.ClassName..")"
+        if inst:IsA("BasePart") then
+            local p = inst.Position
+            local s = inst.Size
+            line = line..string.format(" pos=(%.1f,%.1f,%.1f) size=(%.1f,%.1f,%.1f)", p.X,p.Y,p.Z, s.X,s.Y,s.Z)
+        elseif inst:IsA("ValueBase") then
+            local ok,val = pcall(function() return inst.Value end)
+            if ok and val ~= nil then line = line.." value="..tostring(val) end
+        end
+        table.insert(lines, line)
     end
-    table.insert(lines, line)
+
     if depth >= depthLimit then return end
     for _,c in ipairs(inst:GetChildren()) do
         if #lines >= maxLines then break end
-        snapshot_instance(c, depth+1, lines, depthLimit, maxLines, classFilter, nameFilter)
+        local childPath = (path and (path.."."..c.Name)) or c.Name
+        snapshot_instance(c, depth+1, lines, depthLimit, maxLines, classFilter, nameFilter, childPath)
     end
 end
 
@@ -69,8 +75,7 @@ local function build_service_context(selected, filter)
         if enabled then
             local ok, svc = pcall(function() return game:GetService(svcName) end)
             if ok and svc then
-                table.insert(blockLines, ("-- %s"):format(svcName))
-                snapshot_instance(svc, 0, blockLines, 3, 400, filter.class, filter.name)
+                snapshot_instance(svc, 0, blockLines, 4, 800, filter.class, filter.name, string.lower(svc.Name))
             end
         end
     end
