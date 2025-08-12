@@ -24,18 +24,18 @@ local function add_lbl(parent, txt)
     return l
 end
 
-local function add_code_block(btn, code)
+local function add_code_block(gui, code)
     local t = code:gsub("\r","")
     local first = t:match("^%s*([%w%-_]*)\n")
     if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
         t = t:gsub("^%s*[%w%-_]*\n", "", 1)
     end
     if synx and synx.syn and synx.syn.hl then
-        btn.Text = synx.syn.hl(t)
-        btn.RichText = true
+        gui.Text = synx.syn.hl(t)
+        gui.RichText = true
     else
-        btn.Text = t
-        btn.RichText = false
+        gui.Text = t
+        gui.RichText = false
     end
     return t
 end
@@ -279,29 +279,27 @@ local function attach(win, opt)
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then add_lbl(box, pre) end
-            local chatbtn = Instance.new("TextButton")
-            chatbtn.AutoButtonColor = true
-            chatbtn.BackgroundColor3 = lib.Scheme.MainColor
-            chatbtn.BorderColor3 = lib.Scheme.OutlineColor
-            chatbtn.TextXAlignment = Enum.TextXAlignment.Left
-            chatbtn.TextYAlignment = Enum.TextYAlignment.Top
-            chatbtn.TextWrapped = true
-            chatbtn.FontFace = lib.Scheme.Font
-            chatbtn.TextSize = 14
-            chatbtn.TextColor3 = lib.Scheme.FontColor
-            chatbtn.AutomaticSize = Enum.AutomaticSize.Y
-            chatbtn.Size = UDim2.new(1,-12,0,0)
-            chatbtn.Parent = box
+            -- chat view: render code as label (no insert action here)
+            local chatlbl = Instance.new("TextLabel")
+            chatlbl.BackgroundColor3 = lib.Scheme.MainColor
+            chatlbl.BorderColor3 = lib.Scheme.OutlineColor
+            chatlbl.TextXAlignment = Enum.TextXAlignment.Left
+            chatlbl.TextYAlignment = Enum.TextYAlignment.Top
+            chatlbl.TextWrapped = true
+            chatlbl.FontFace = lib.Scheme.Font
+            chatlbl.TextSize = 14
+            chatlbl.TextColor3 = lib.Scheme.FontColor
+            chatlbl.AutomaticSize = Enum.AutomaticSize.Y
+            chatlbl.Size = UDim2.new(1,-12,0,0)
+            chatlbl.Parent = box
             local pad = Instance.new("UIPadding")
             pad.PaddingLeft = UDim.new(0,8)
             pad.PaddingRight = UDim.new(0,8)
             pad.PaddingTop = UDim.new(0,6)
             pad.PaddingBottom = UDim.new(0,6)
-            pad.Parent = chatbtn
-            local norm = add_code_block(chatbtn, seg)
-            chatbtn.MouseButton1Click:Connect(function()
-                insert_code(norm)
-            end)
+            pad.Parent = chatlbl
+            add_code_block(chatlbl, seg)
+            -- always save to scripts tab for insertion there
             add_script(seg)
             i = b + 1
         end
