@@ -3,7 +3,7 @@ if not lib then error("load Library.lua first") end
 
 local hs = game:GetService("HttpService")
 
-local function add_msg(parent, txt, right)
+local function add_msg(parent, txt)
     local l = Instance.new("TextLabel")
     l.BackgroundColor3 = lib.Scheme.BackgroundColor
     l.TextXAlignment = Enum.TextXAlignment.Left
@@ -24,7 +24,7 @@ local function attach(win, opt)
     local model = opt.model or "gpt-5"
     local sys = opt.system or "you are a helpful assistant"
 
-    local tab = win:AddTab("AI Chat", "message-circle")
+    local tab = win:AddKeyTab("AI Chat")
 
     local root = Instance.new("Frame")
     root.BackgroundTransparency = 1
@@ -79,9 +79,7 @@ local function attach(win, opt)
     btn.Position = UDim2.new(1,-96,0,0)
     btn.Parent = row
 
-    local msgs = {
-        { role = "system", content = sys }
-    }
+    local msgs = { { role = "system", content = sys } }
 
     local busy = false
     local function send()
@@ -100,10 +98,7 @@ local function attach(win, opt)
                 ["Content-Type"] = "application/json";
                 ["Authorization"] = "Bearer "..key;
             };
-            Body = hs:JSONEncode({
-                model = model;
-                messages = msgs;
-            });
+            Body = hs:JSONEncode({ model = model; messages = msgs; });
         })
         local ok, data = pcall(hs.JSONDecode, hs, r and r.Body or "{}")
         local out = (ok and data and data.choices and data.choices[1] and data.choices[1].message and data.choices[1].message.content) or "error"
