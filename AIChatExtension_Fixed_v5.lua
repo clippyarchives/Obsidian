@@ -506,8 +506,58 @@ local function attach(win, opt)
 
     local currentInst
     local aiToggle
-    
-    local previewLabel = gRight:AddLabel({ Text = "select a script to preview", DoesWrap = true })
+
+    -- Full script viewer (scrollable)
+    local pvHolder = Instance.new("Frame")
+    pvHolder.BackgroundTransparency = 1
+    pvHolder.Size = UDim2.new(1,0,0,300)
+    pvHolder.Parent = gRight.Container
+
+    local pvFrame = Instance.new("Frame")
+    pvFrame.BackgroundColor3 = lib.Scheme.MainColor
+    pvFrame.BorderColor3 = lib.Scheme.OutlineColor
+    pvFrame.BorderSizePixel = 1
+    pvFrame.Size = UDim2.new(1,0,1,0)
+    pvFrame.Parent = pvHolder
+
+    local pv = Instance.new("ScrollingFrame")
+    pv.BackgroundTransparency = 1
+    pv.AutomaticCanvasSize = Enum.AutomaticSize.None
+    pv.CanvasSize = UDim2.fromOffset(0,0)
+    pv.ScrollBarThickness = 2
+    pv.Size = UDim2.new(1,-4,1,-4)
+    pv.Position = UDim2.fromOffset(2,2)
+    pv.Parent = pvFrame
+
+    local pvText = Instance.new("TextLabel")
+    pvText.BackgroundTransparency = 1
+    pvText.TextXAlignment = Enum.TextXAlignment.Left
+    pvText.TextYAlignment = Enum.TextYAlignment.Top
+    pvText.TextWrapped = true
+    pvText.FontFace = lib.Scheme.Font
+    pvText.TextSize = 14
+    pvText.TextColor3 = lib.Scheme.FontColor
+    pvText.Size = UDim2.new(1,-12,0,0)
+    pvText.Position = UDim2.fromOffset(6,6)
+    pvText.Parent = pv
+
+    local last_plain = ""
+    local function apply_preview_text(src)
+        last_plain = src or ""
+        local t = add_code_block(pvText, last_plain)
+        local _, y = lib:GetTextBounds(t, pvText.FontFace, pvText.TextSize, pv.AbsoluteSize.X - 12)
+        pvText.Size = UDim2.new(1, -12, 0, y + 8)
+        pv.CanvasSize = UDim2.fromOffset(0, y + 12)
+    end
+    local function recalc_preview_layout()
+        if last_plain == nil then return end
+        local _, y = lib:GetTextBounds(last_plain, pvText.FontFace, pvText.TextSize, pv.AbsoluteSize.X - 12)
+        pvText.Size = UDim2.new(1, -12, 0, y + 8)
+        pv.CanvasSize = UDim2.fromOffset(0, y + 12)
+    end
+    pv:GetPropertyChangedSignal("AbsoluteSize"):Connect(recalc_preview_layout)
+
+    apply_preview_text("select a script to preview")
 
     aiToggle = gRight:AddToggle("AI_CONTEXT", { 
         Text = "Give Context To AI"; 
@@ -526,7 +576,7 @@ local function attach(win, opt)
             Text = inst.Name .. " (" .. inst.ClassName .. ")"; 
             Func = function()
                 currentInst = inst;
-                previewLabel:SetText("decompiling " .. inst.Name .. "...");
+                apply_preview_text("decompiling " .. inst.Name .. "...")
                 aiToggle:SetValue(include_game_scripts[inst] or false);
                 
                 task.spawn(function()
@@ -535,7 +585,7 @@ local function attach(win, opt)
                     end);
                     local code = ok and src or "decompile failed";
                     scripts_store[inst] = code;
-                    previewLabel:SetText(code);
+                    apply_preview_text(code)
                     
                     if setclipboard then
                         setclipboard(code);
