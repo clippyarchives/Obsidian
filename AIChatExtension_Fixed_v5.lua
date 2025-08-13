@@ -162,6 +162,31 @@ local function find_scripts()
     return foundScripts
 end
 
+local function extract_answer(data)
+    if type(data) ~= "table" then return nil end
+    if type(data.output_text) == "string" and #data.output_text > 0 then return data.output_text end
+    if type(data.output) == "table" then
+        for _, item in ipairs(data.output) do
+            if item and item.type == "message" and type(item.content) == "table" then
+                for _, c in ipairs(item.content) do
+                    if type(c) == "table" then
+                        if c.type == "output_text" and type(c.text) == "string" and #c.text > 0 then
+                            return c.text
+                        end
+                        if c.type == "text" and c.text and c.text.value then
+                            return tostring(c.text.value)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if type(data.choices) == "table" and data.choices[1] and data.choices[1].message and type(data.choices[1].message.content) == "string" then
+        return data.choices[1].message.content
+    end
+    return nil
+end
+
 local function attach(win, opt)
     opt = opt or {}
     local key = opt.key or ""
@@ -245,12 +270,29 @@ local function attach(win, opt)
     inp.TextColor3 = lib.Scheme.FontColor
     inp.TextSize = 14
     inp.PlaceholderText = "type..."
-    inp.Size = UDim2.new(1,-110,1,0)
+    inp.Size = UDim2.new(1,-206,1,0)
     inp.Parent = row
 
     local ip = Instance.new("UIPadding")
     ip.PaddingLeft = UDim.new(0,8)
     ip.Parent = inp
+
+    local web = Instance.new("TextButton")
+    web.BackgroundColor3 = lib.Scheme.MainColor
+    web.BorderColor3 = lib.Scheme.OutlineColor
+    web.Text = "web: off"
+    web.FontFace = lib.Scheme.Font
+    web.TextSize = 14
+    web.TextColor3 = lib.Scheme.FontColor
+    web.Size = UDim2.new(0,96,1,0)
+    web.Position = UDim2.new(1,-200,0,0)
+    web.Parent = row
+
+    local use_web = false
+    web.MouseButton1Click:Connect(function()
+        use_web = not use_web
+        web.Text = use_web and "web: on" or "web: off"
+    end)
 
     local btn = Instance.new("TextButton")
     btn.BackgroundColor3 = lib.Scheme.MainColor
@@ -555,43 +597,73 @@ local function attach(win, opt)
         table.insert(base, { role = "user", content = q })
         busy = true
         
-        local success, result = pcall(function()
-            return request({ 
-                Url = "https://api.openai.com/v1/chat/completions"; 
-                Method = "POST"; 
-                Headers = { 
-                    ["Content-Type"] = "application/json"; 
-                    ["Authorization"] = "Bearer "..key; 
-                }; 
-                Body = hs:JSONEncode({ 
-                    model = model; 
-                    messages = base; 
-                }); 
-            })
-        end)
-        
         local out = "request failed"
-        
-        if not success then
-            out = "request error: " .. tostring(result)
-        elseif not result then
-            out = "no response received"
-        elseif not result.Body then
-            out = "empty response body"
-        else
-            local parseOk, data = pcall(hs.JSONDecode, hs, result.Body)
-            if not parseOk then
-                out = "json parse error: " .. tostring(data) .. "\nraw response: " .. result.Body
-            elseif data.error then
-                out = "api error: " .. (data.error.message or tostring(data.error))
-            elseif not data.choices or #data.choices == 0 then
-                out = "no choices in response\nraw: " .. result.Body
-            elseif not data.choices[1].message then
-                out = "no message in choice\nraw: " .. result.Body  
-            elseif not data.choices[1].message.content then
-                out = "no content in message\nraw: " .. result.Body
+
+        if use_web then
+            local ctx = {}
+            for _,m in ipairs(base) do table.insert(ctx, m.content or "") end
+            local prompt = table.concat(ctx, "\n\n")
+            local body = { model = model, tools = { { type = "web_search_preview" } }, input = prompt }
+            if getgenv().mcp_github_url then
+                body.mcp = { servers = { github = { transport = "http", url = getgenv().mcp_github_url } } }
+            end
+            local success, result = pcall(function()
+                return request({
+                    Url = "https://api.openai.com/v1/responses";
+                    Method = "POST";
+                    Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; };
+                    Body = hs:JSONEncode(body);
+                })
+            end)
+            if not success then
+                out = "request error: "..tostring(result)
+            elseif not result or not result.Body then
+                out = "empty response body"
             else
-                out = data.choices[1].message.content
+                local okj, data = pcall(hs.JSONDecode, hs, result.Body)
+                if okj then
+                    out = extract_answer(data) or "no answer text"
+                else
+                    out = "json parse error"
+                end
+            end
+        else
+            local success, result = pcall(function()
+                return request({ 
+                    Url = "https://api.openai.com/v1/chat/completions"; 
+                    Method = "POST"; 
+                    Headers = { 
+                        ["Content-Type"] = "application/json"; 
+                        ["Authorization"] = "Bearer "..key; 
+                    }; 
+                    Body = hs:JSONEncode({ 
+                        model = model; 
+                        messages = base; 
+                    }); 
+                })
+            end)
+            
+            if not success then
+                out = "request error: " .. tostring(result)
+            elseif not result then
+                out = "no response received"
+            elseif not result.Body then
+                out = "empty response body"
+            else
+                local parseOk, data = pcall(hs.JSONDecode, hs, result.Body)
+                if not parseOk then
+                    out = "json parse error: " .. tostring(data) .. "\nraw response: " .. result.Body
+                elseif data.error then
+                    out = "api error: " .. (data.error.message or tostring(data.error))
+                elseif not data.choices or #data.choices == 0 then
+                    out = "no choices in response\nraw: " .. result.Body
+                elseif not data.choices[1].message then
+                    out = "no message in choice\nraw: " .. result.Body  
+                elseif not data.choices[1].message.content then
+                    out = "no content in message\nraw: " .. result.Body
+                else
+                    out = data.choices[1].message.content
+                end
             end
         end
         
