@@ -507,30 +507,8 @@ local function attach(win, opt)
     local currentInst
     local aiToggle
     
-    local previewBox = Instance.new("ScrollingFrame")
-    previewBox.BackgroundColor3 = lib.Scheme.BackgroundColor
-    previewBox.BorderColor3 = lib.Scheme.OutlineColor
-    previewBox.BorderSizePixel = 1
-    previewBox.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    previewBox.CanvasSize = UDim2.fromOffset(0,0)
-    previewBox.ScrollBarThickness = 4
-    previewBox.Size = UDim2.new(1,-12,1,-80)
-    previewBox.Position = UDim2.fromOffset(6,6)
-    previewBox.Parent = gRight.Container
-
-    local previewText = Instance.new("TextLabel")
-    previewText.BackgroundTransparency = 1
-    previewText.TextXAlignment = Enum.TextXAlignment.Left
-    previewText.TextYAlignment = Enum.TextYAlignment.Top
-    previewText.TextWrapped = true
-    previewText.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-    previewText.TextSize = 12
-    previewText.TextColor3 = lib.Scheme.FontColor
-    previewText.AutomaticSize = Enum.AutomaticSize.Y
-    previewText.Size = UDim2.new(1,-12,0,0)
-    previewText.Position = UDim2.fromOffset(6,6)
-    previewText.Text = "select a script to preview"
-    previewText.Parent = previewBox
+    -- old scrolling preview was causing layout issues; replace with library label
+    local previewLabel = gRight:AddLabel({ Text = "select a script to preview", DoesWrap = true })
 
     aiToggle = gRight:AddToggle("AI_CONTEXT", { 
         Text = "Give Context To AI"; 
@@ -549,7 +527,7 @@ local function attach(win, opt)
             Text = inst.Name .. " (" .. inst.ClassName .. ")"; 
             Func = function()
                 currentInst = inst;
-                previewText.Text = "decompiling " .. inst.Name .. "...";
+                previewLabel:SetText("decompiling " .. inst.Name .. "...");
                 aiToggle:SetValue(include_game_scripts[inst] or false);
                 
                 task.spawn(function()
@@ -558,7 +536,7 @@ local function attach(win, opt)
                     end);
                     local code = ok and src or "decompile failed";
                     scripts_store[inst] = code;
-                    previewText.Text = code;
+                    previewLabel:SetText(code);
                     
                     if setclipboard then
                         setclipboard(code);
