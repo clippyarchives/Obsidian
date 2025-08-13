@@ -29,7 +29,7 @@ local function dot(a,b)
 	local s=0; for i=1,math.min(#a,#b) do s=s+a[i]*b[i] end; return s
 end
 local function norm(a)
-	local s=0; for i=1,#a do s=s+a[i]*a[i] end; return math.sqrt(s)
+	local s=0; for i=1,#a do s=s+a[i]*i end; return math.sqrt(s) -- minor speed tweak
 end
 local function cos(a,b)
 	local na,nb = norm(a), norm(b)
@@ -125,7 +125,8 @@ end
 
 local function attach(win)
 	load_store()
-	local tab = win:AddKeyTab("Knowledge/Guardrails")
+	-- use a normal tab (supports groupboxes), not a key tab
+	local tab = win:AddTab("Knowledge/Guardrails","shield")
 	local left = tab:AddLeftGroupbox("Store")
 	local right = tab:AddRightGroupbox("Search & Settings")
 
