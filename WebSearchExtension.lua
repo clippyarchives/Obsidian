@@ -19,6 +19,33 @@ local function add_lbl(p,t)
 	return l
 end
 
+local function extract_answer(data)
+	if type(data) ~= "table" then return nil end
+	if type(data.output_text) == "string" and #data.output_text > 0 then
+		return data.output_text
+	end
+	if type(data.output) == "table" then
+		for _, item in ipairs(data.output) do
+			if item and item.type == "message" and type(item.content) == "table" then
+				for _, c in ipairs(item.content) do
+					if type(c) == "table" then
+						if c.type == "output_text" and type(c.text) == "string" and #c.text > 0 then
+							return c.text
+						end
+						if c.type == "text" and c.text and c.text.value then
+							return tostring(c.text.value)
+						end
+					end
+				end
+			end
+		end
+	end
+	if type(data.choices) == "table" and data.choices[1] and data.choices[1].message and type(data.choices[1].message.content) == "string" then
+		return data.choices[1].message.content
+	end
+	return nil
+end
+
 local function attach(win,opt)
 	opt = opt or {}
 	local key = opt.key or getgenv().ai_key or ""
@@ -114,11 +141,18 @@ local function attach(win,opt)
 		local out = "request failed"
 		if ok and res and res.Body then
 			local pok, data = pcall(hs.JSONDecode, hs, res.Body)
-			if pok and type(data)=="table" then
-				out = data.output_text or res.Body
+			if pok then
+				local txt = extract_answer(data)
+				if type(txt) == "string" and #txt > 0 then
+					out = txt
+				else
+					out = "no answer text"
+				end
 			else
-				out = res.Body
+				out = "json parse error"
 			end
+		else
+			out = ok and "empty response" or tostring(res)
 		end
 
 		waitlbl:Destroy()
