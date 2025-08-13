@@ -4,6 +4,7 @@ if not lib then error("load Library.lua first") end
 local hs = game:GetService("HttpService")
 local TextService = game:GetService("TextService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 
 local synx
 pcall(function()
@@ -31,6 +32,7 @@ local function add_lbl(parent, txt)
     l.AutomaticSize = Enum.AutomaticSize.Y
     l.Size = UDim2.new(1,-12,0,0)
     l.Text = txt
+    l.RichText = false
     l.Parent = parent
     return l
 end
@@ -38,15 +40,14 @@ end
 local function add_line_with_prefix(parent, prefix_kind, body)
     local txt
     if prefix_kind == "ai" then
-        txt = "<font color='"..ACCENT_HEX.."'>AI</font> > "..(body or "")
+        txt = "AI > "..(body or "")
     else
         local dn = "user"
         local lp = Players.LocalPlayer
         if lp and lp.DisplayName and lp.DisplayName ~= "" then dn = lp.DisplayName end
-        txt = "[<font color='"..ACCENT_HEX.."'>"..dn.."</font>] > "..(body or "")
+        txt = "["..dn.."] > "..(body or "")
     end
     local l = add_lbl(parent, txt)
-    l.RichText = true
     return l
 end
 
@@ -57,8 +58,16 @@ local function add_code_block(gui, code)
         t = t:gsub("^%s*[%w%-_]*\n", "", 1)
     end
     if synx and synx.syn and synx.syn.hl then
-        gui.Text = synx.syn.hl(t)
-        gui.RichText = true
+        local ok, res = pcall(function()
+            return synx.syn.hl(t)
+        end)
+        if ok and type(res) == "string" then
+            gui.Text = res
+            gui.RichText = true
+        else
+            gui.Text = t
+            gui.RichText = false
+        end
     else
         gui.Text = t
         gui.RichText = false
@@ -522,7 +531,7 @@ local function attach(win, opt)
 
     local pv = Instance.new("ScrollingFrame")
     pv.BackgroundTransparency = 1
-    pv.AutomaticCanvasSize = Enum.AutomaticSize.None
+    pv.AutomaticCanvasSize = Enum.AutomaticSize.Y
     pv.CanvasSize = UDim2.fromOffset(0,0)
     pv.ScrollBarThickness = 2
     pv.Size = UDim2.new(1,-4,1,-4)
@@ -537,25 +546,28 @@ local function attach(win, opt)
     pvText.FontFace = lib.Scheme.Font
     pvText.TextSize = 14
     pvText.TextColor3 = lib.Scheme.FontColor
+    pvText.AutomaticSize = Enum.AutomaticSize.Y
     pvText.Size = UDim2.new(1,-12,0,0)
     pvText.Position = UDim2.fromOffset(6,6)
     pvText.Parent = pv
 
-    local last_plain = ""
+    pv.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
+                side.ScrollingEnabled = false
+            end
+            task.delay(0.05, function()
+                for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
+                    side.ScrollingEnabled = true
+                end
+            end)
+        end
+    end)
+
     local function apply_preview_text(src)
-        last_plain = src or ""
-        local t = add_code_block(pvText, last_plain)
-        local _, y = lib:GetTextBounds(t, pvText.FontFace, pvText.TextSize, pv.AbsoluteSize.X - 12)
-        pvText.Size = UDim2.new(1, -12, 0, y + 8)
-        pv.CanvasSize = UDim2.fromOffset(0, y + 12)
+        local t = add_code_block(pvText, src or "")
+        return t
     end
-    local function recalc_preview_layout()
-        if last_plain == nil then return end
-        local _, y = lib:GetTextBounds(last_plain, pvText.FontFace, pvText.TextSize, pv.AbsoluteSize.X - 12)
-        pvText.Size = UDim2.new(1, -12, 0, y + 8)
-        pv.CanvasSize = UDim2.fromOffset(0, y + 12)
-    end
-    pv:GetPropertyChangedSignal("AbsoluteSize"):Connect(recalc_preview_layout)
 
     apply_preview_text("select a script to preview")
 
@@ -649,7 +661,6 @@ local function attach(win, opt)
     end
 
     local function maybe_prepend_docs(q, msgs)
-        -- toggle is not present yet in this version; keep default off path
         local f = getgenv().obs_knowledge_context_for_query
         if typeof(f) == "function" and (getgenv().ai_use_docs == true) then
             local ctx = f(q)
