@@ -136,64 +136,88 @@ local function parse_list(s)
     return out
 end
 
-local function format(obj)
-    local ok, str = pcall(hs.JSONEncode, hs, obj)
-    return ok and str or tostring(obj)
+local function build_service_context(selected, filter)
+    local blockLines = {}
+    for svcName, enabled in pairs(selected) do
+        if enabled then
+            local ok, svc = pcall(function() return game:GetService(svcName) end)
+            if ok and svc then
+                snapshot_instance(svc, 0, blockLines, 4, 800, filter.classes, filter.names, string.lower(svc.Name))
+            end
+        end
+    end
+    return table.concat(blockLines, "\n")
+end
+
+local function find_scripts()
+    local foundScripts = {}
+    local plrs = game:GetService("Players")
+    
+    local function safe_scan(container, name)
+        local ok, result = pcall(function()
+            if not container then return {} end
+            local scripts = {}
+            for _, child in ipairs(container:GetDescendants()) do
+                if child:IsA("LocalScript") or child:IsA("ModuleScript") then
+                    table.insert(scripts, child)
+                end
+                if #scripts > 50 then break end
+            end
+            return scripts
+        end)
+        return ok and result or {}
+    end
+    
+    local containers = {
+        {game:GetService("ReplicatedStorage"), "ReplicatedStorage"},
+        {game:GetService("StarterGui"), "StarterGui"},
+        {game:GetService("StarterPlayerScripts"), "StarterPlayerScripts"}
+    }
+    
+    if plrs.LocalPlayer then
+        local ok, playerGui = pcall(function() return plrs.LocalPlayer:FindFirstChild("PlayerGui") end)
+        if ok and playerGui then
+            table.insert(containers, {playerGui, "PlayerGui"})
+        end
+        
+        local ok2, playerScripts = pcall(function() return plrs.LocalPlayer:FindFirstChild("PlayerScripts") end)
+        if ok2 and playerScripts then
+            table.insert(containers, {playerScripts, "PlayerScripts"})
+        end
+    end
+    
+    for _, container in ipairs(containers) do
+        local scripts = safe_scan(container[1], container[2])
+        for _, script in ipairs(scripts) do
+            table.insert(foundScripts, script)
+        end
+    end
+    
+    return foundScripts
 end
 
 local function extract_answer(data)
     if type(data) ~= "table" then return nil end
-
     if type(data.output_text) == "string" and #data.output_text > 0 then return data.output_text end
-
-    local collected = {}
     if type(data.output) == "table" then
         for _, item in ipairs(data.output) do
             if item and item.type == "message" and type(item.content) == "table" then
                 for _, c in ipairs(item.content) do
                     if type(c) == "table" then
                         if c.type == "output_text" and type(c.text) == "string" and #c.text > 0 then
-                            table.insert(collected, c.text)
-                        elseif c.type == "text" and (c.text and (c.text.value or c.text)) then
-                            table.insert(collected, tostring(c.text.value or c.text))
+                            return c.text
+                        end
+                        if c.type == "text" and c.text and c.text.value then
+                            return tostring(c.text.value)
                         end
                     end
                 end
-            elseif item and item.type == "mcp_list_tools" then
-                local lbl = item.server_label or "(unknown)"
-                local names = {}
-                if type(item.tools) == "table" then
-                    for _, t in ipairs(item.tools) do table.insert(names, t.name or "?") end
-                end
-                table.insert(collected, string.format("mcp[%s] tools: %s", lbl, table.concat(names, ", ")))
-            elseif item and item.type == "mcp_call" then
-                local lbl = item.server_label or "(unknown)"
-                if item.error then
-                    table.insert(collected, string.format("mcp[%s] %s error: %s", lbl, tostring(item.name or "tool"), tostring(item.error)))
-                else
-                    local out = item.output
-                    if type(out) == "table" then out = format(out) end
-                    table.insert(collected, string.format("mcp[%s] %s -> %s", lbl, tostring(item.name or "tool"), tostring(out)))
-                end
-            elseif item and item.type == "mcp_approval_request" then
-                local lbl = item.server_label or "(unknown)"
-                table.insert(collected, string.format("mcp[%s] approval required for %s", lbl, tostring(item.name or "tool")))
             end
         end
     end
-
-    if #collected > 0 then
-        return table.concat(collected, "\n")
-    end
-
     if type(data.choices) == "table" and data.choices[1] and data.choices[1].message and type(data.choices[1].message.content) == "string" then
         return data.choices[1].message.content
     end
-
-    if data.error and (data.error.message or data.error.type) then
-        return "api error: " .. tostring(data.error.message or data.error.type)
-    end
-
     return nil
 end
 
@@ -636,6 +660,16 @@ local function attach(win, opt)
         end
     end
 
+    local function maybe_prepend_docs(q, msgs)
+        local f = getgenv().obs_knowledge_context_for_query
+        if typeof(f) == "function" and (getgenv().ai_use_docs == true) then
+            local ctx = f(q)
+            if type(ctx) == "string" and #ctx > 0 then
+                table.insert(msgs, 1, { role = "system", content = "docs context:\n"..ctx })
+            end
+        end
+    end
+
     local busy = false
     local function send()
         if busy then return end
@@ -646,6 +680,7 @@ local function attach(win, opt)
         local waitlbl = add_lbl(box, "...")
         local base = build_messages()
         table.insert(base, { role = "user", content = q })
+        maybe_prepend_docs(q, base)
         busy = true
         
         local out = "request failed"
