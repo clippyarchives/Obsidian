@@ -598,6 +598,17 @@ local function attach(win, opt)
         end
     end
 
+    local function maybe_prepend_docs(q, msgs)
+        -- toggle is not present yet in this version; keep default off path
+        local f = getgenv().obs_knowledge_context_for_query
+        if typeof(f) == "function" and (getgenv().ai_use_docs == true) then
+            local ctx = f(q)
+            if type(ctx) == "string" and #ctx > 0 then
+                table.insert(msgs, 1, { role = "system", content = "docs context:\n"..ctx })
+            end
+        end
+    end
+
     local busy = false
     local function send()
         if busy then return end
@@ -608,6 +619,7 @@ local function attach(win, opt)
         local waitlbl = add_lbl(box, "...")
         local base = build_messages()
         table.insert(base, { role = "user", content = q })
+        maybe_prepend_docs(q, base)
         busy = true
         
         local out = "request failed"
