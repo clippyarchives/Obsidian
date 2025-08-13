@@ -151,7 +151,7 @@ local function attach(win)
 	right:AddDivider()
 	right:AddToggle("KG_ModIn", { Text = "moderate input"; Default = false; Callback=function(v) getgenv().kg_mod_in = v end })
 	right:AddToggle("KG_ModOut", { Text = "moderate output"; Default = false; Callback=function(v) getgenv().kg_mod_out = v end })
-	right:AddToggle("KG_UseDocs", { Text = "use docs in ai chat"; Default = (getgenv().ai_use_docs==true); Callback=function(v) getgenv().ai_use_docs = v end })
+	right:AddToggle("KG_UseDocs", { Text = "use docs in ai chat [must have web on]"; Default = (getgenv().ai_use_docs==true); Callback=function(v) getgenv().ai_use_docs = v end })
 
 	return { tab = tab }
 end
