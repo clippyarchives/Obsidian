@@ -528,8 +528,7 @@ local function attach(win, opt)
                 currentInst = inst;
                 previewLabel:SetText("decompiling " .. inst.Name .. "...");
                 aiToggle:SetValue(include_game_scripts[inst] or false);
-                local ed2 = lib:CreateCodeEditor({ Parent = lib.ScreenGui; Size = UDim2.fromOffset(720,460); Position = UDim2.fromOffset(60,60); Title = inst.Name .. " (" .. inst.ClassName .. ")"; Default = "decompiling..."; Path = "decompiled_"..inst.Name..".lua" })
-                pcall(function() if synx and synx.attach then synx.attach(ed2) end end)
+                
                 task.spawn(function()
                     local ok, src = pcall(function() 
                         return decompile(inst) 
@@ -537,7 +536,7 @@ local function attach(win, opt)
                     local code = ok and src or "decompile failed";
                     scripts_store[inst] = code;
                     previewLabel:SetText(code);
-                    pcall(function() ed2:SetText(code) end)
+                    
                     if setclipboard then
                         setclipboard(code);
                         lib:Notify("copied to clipboard", 2);
