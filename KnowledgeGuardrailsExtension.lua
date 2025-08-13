@@ -29,7 +29,7 @@ local function dot(a,b)
 	local s=0; for i=1,math.min(#a,#b) do s=s+a[i]*b[i] end; return s
 end
 local function norm(a)
-	local s=0; for i=1,#a do s=s+a[i]*i end; return math.sqrt(s) -- minor speed tweak
+	local s=0; for i=1,#a do s=s+a[i]*i end; return math.sqrt(s)
 end
 local function cos(a,b)
 	local na,nb = norm(a), norm(b)
@@ -125,8 +125,7 @@ end
 
 local function attach(win)
 	load_store()
-	-- use a normal tab (supports groupboxes), not a key tab
-	local tab = win:AddTab("Knowledge/Guardrails","shield")
+	local tab = win:AddTab("Add Docs","book") -- renamed
 	local left = tab:AddLeftGroupbox("Store")
 	local right = tab:AddRightGroupbox("Search & Settings")
 
@@ -142,7 +141,7 @@ local function attach(win)
 
 	right:AddSlider("KG_TopK", { Text = "top-k"; Default = 3; Min = 1; Max = 5; Rounding = 0 })
 	local prev = right:AddLabel({ Text = ""; DoesWrap = true })
-	right:AddInput("KG_Query", { Text = "query"; Default = ""; Finished = true })
+	right:AddInput("KG_Query", { Text = "query (preview only)"; Default = ""; Finished = true })
 	right:AddButton({ Text = "Preview", Func = function()
 		local q = (lib.Options.KG_Query and lib.Options.KG_Query.Value) or ""
 		if q=="" then prev:SetText("") return end
@@ -152,6 +151,7 @@ local function attach(win)
 	right:AddDivider()
 	right:AddToggle("KG_ModIn", { Text = "moderate input"; Default = false; Callback=function(v) getgenv().kg_mod_in = v end })
 	right:AddToggle("KG_ModOut", { Text = "moderate output"; Default = false; Callback=function(v) getgenv().kg_mod_out = v end })
+	right:AddToggle("KG_UseDocs", { Text = "use docs in ai chat"; Default = (getgenv().ai_use_docs==true); Callback=function(v) getgenv().ai_use_docs = v end })
 
 	return { tab = tab }
 end
