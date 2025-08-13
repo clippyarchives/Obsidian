@@ -3,11 +3,21 @@ if not lib then error("load Library.lua first") end
 
 local hs = game:GetService("HttpService")
 local TextService = game:GetService("TextService")
+local Players = game:GetService("Players")
 
 local synx
 pcall(function()
     synx = loadstring(game:HttpGet("https://raw.githubusercontent.com/clippyarchives/Obsidian/feature/ide-extension/IDESyntaxExtension.lua"))()
 end)
+
+local function color_to_hex(c)
+    local r = math.clamp(math.floor((c.R or 0)*255+0.5),0,255)
+    local g = math.clamp(math.floor((c.G or 0)*255+0.5),0,255)
+    local b = math.clamp(math.floor((c.B or 0)*255+0.5),0,255)
+    return string.format("#%02X%02X%02X", r, g, b)
+end
+
+local ACCENT_HEX = color_to_hex(lib.Scheme.AccentColor or Color3.fromRGB(157,125,255))
 
 local function add_lbl(parent, txt)
     local l = Instance.new("TextLabel")
@@ -22,6 +32,21 @@ local function add_lbl(parent, txt)
     l.Size = UDim2.new(1,-12,0,0)
     l.Text = txt
     l.Parent = parent
+    return l
+end
+
+local function add_line_with_prefix(parent, prefix_kind, body)
+    local txt
+    if prefix_kind == "ai" then
+        txt = "<font color='"..ACCENT_HEX.."'>AI</font> > "..(body or "")
+    else
+        local dn = "user"
+        local lp = Players.LocalPlayer
+        if lp and lp.DisplayName and lp.DisplayName ~= "" then dn = lp.DisplayName end
+        txt = "[<font color='"..ACCENT_HEX.."'>"..dn.."</font>] > "..(body or "")
+    end
+    local l = add_lbl(parent, txt)
+    l.RichText = true
     return l
 end
 
@@ -570,16 +595,27 @@ local function attach(win, opt)
     rebuild_game_scripts();
 
     local function render_reply(text)
+        local prefixed = false
         local i = 1
         while true do
             local a,b,seg = text:find("```(.-)```", i)
             if not a then
                 local tail = text:sub(i)
-                if tail ~= "" then add_lbl(box, tail) end
+                if tail ~= "" then
+                    if not prefixed then add_line_with_prefix(box, "ai", tail); prefixed = true else add_lbl(box, tail) end
+                elseif not prefixed then
+                    add_line_with_prefix(box, "ai", "")
+                    prefixed = true
+                end
                 break
             end
             local pre = text:sub(i, a-1)
-            if pre ~= "" then add_lbl(box, pre) end
+            if pre ~= "" then
+                if not prefixed then add_line_with_prefix(box, "ai", pre); prefixed = true else add_lbl(box, pre) end
+            elseif not prefixed then
+                add_line_with_prefix(box, "ai", "")
+                prefixed = true
+            end
             add_script(seg)
             i = b + 1
         end
@@ -591,7 +627,7 @@ local function attach(win, opt)
         local q = inp.Text
         if q == "" then return end
         inp.Text = ""
-        add_lbl(box, "> "..q)
+        add_line_with_prefix(box, "user", q)
         local waitlbl = add_lbl(box, "...")
         local base = build_messages()
         table.insert(base, { role = "user", content = q })
