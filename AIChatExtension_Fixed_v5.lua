@@ -771,6 +771,7 @@ local function attach(win, opt)
             codebtn.MouseButton1Click:Connect(function()
                 insert_code(norm)
             end)
+            add_script(norm)
             i = b + 1
         end
     end
@@ -918,5 +919,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v12")
+print("ai_chat_ext v13")
 return { attach = attach }
