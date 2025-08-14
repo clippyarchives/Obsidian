@@ -690,19 +690,8 @@ local function attach(win, opt)
             for _,m in ipairs(base) do table.insert(ctx, m.content or "") end
             local prompt = table.concat(ctx, "\n\n")
             local body = { model = model, tools = { { type = "web_search_preview" } }, input = prompt }
-            if getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true then
-                local servers = getgenv().mcp_servers
-                if typeof(servers) == "table" then
-                    for _, s in ipairs(servers) do
-                        if s and (s.enabled ~= false) and typeof(s.label)=="string" and typeof(s.url)=="string" then
-                            local t = { type = "mcp", server_label = s.label, server_url = s.url }
-                            if typeof(s.headers)=="table" then t.headers = s.headers end
-                            if typeof(s.allowed_tools)=="table" and #s.allowed_tools>0 then t.allowed_tools = s.allowed_tools end
-                            if s.require_approval == "never" or typeof(s.require_approval)=="table" then t.require_approval = s.require_approval end
-                            table.insert(body.tools, t)
-                        end
-                    end
-                end
+            if getgenv().mcp_github_url then
+                body.mcp = { servers = { github = { transport = "http", url = getgenv().mcp_github_url } } }
             end
             local success, result = pcall(function()
                 return request({
