@@ -229,25 +229,30 @@ local function extract_answer(data)
     return nil
 end
 
-local function stringify_any(o, depth)
-    depth = (depth or 0) + 1
-    if depth > 3 then return "…" end
-    local ty = typeof(o)
-    if ty == "string" then return o end
-    if ty == "number" or ty == "boolean" then return tostring(o) end
-    if ty == "table" then
-        local parts = {}
-        for k,v in pairs(o) do
-            local key = tostring(k)
-            if key == "tool" or key == "content" or key == "message" then
-                table.insert(parts, key.."=")
-            else
-                table.insert(parts, key.."="..stringify_any(v, depth))
-            end
-        end
-        return "{"..table.concat(parts, ", ").."}"
+local function is_array(t)
+    if type(t) ~= "table" then return false end
+    local n = 0
+    for k,_ in pairs(t) do
+        if type(k) ~= "number" then return false end
+        n = n + 1
     end
-    return tostring(o)
+    return n == #t and n > 0
+end
+
+local function normalize_headers(h)
+    if type(h) ~= "table" then return nil end
+    if not is_array(h) then return h end
+    local obj = {}
+    for _,v in ipairs(h) do
+        if type(v) == "table" then
+            for kk,vv in pairs(v) do obj[tostring(kk)] = tostring(vv) end
+        elseif type(v) == "string" then
+            local k, val = string.match(v, "^%s*([^:=%s]+)%s*[:=]%s*(.+)$")
+            if k and val then obj[k] = val end
+        end
+    end
+    if next(obj) == nil then return nil end
+    return obj
 end
 
 local function attach(win, opt)
@@ -325,7 +330,10 @@ local function attach(win, opt)
                 if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
                     local label = tostring(e.label or ("srv"..tostring(_)))
                     local tool = { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" }
-                    if type(e.headers) == "table" then tool.headers = e.headers end
+                    if type(e.headers) == "table" then
+                        local hdr = normalize_headers(e.headers)
+                        if hdr then tool.headers = hdr end
+                    end
                     if type(e.allowed_tools) == "table" then tool.allowed_tools = e.allowed_tools end
                     table.insert(tools, tool)
                 end
