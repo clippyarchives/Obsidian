@@ -15,7 +15,7 @@ local function color_to_hex(c)
 	local r = math.clamp(math.floor((c.R or 0)*255+0.5),0,255)
 	local g = math.clamp(math.floor((c.G or 0)*255+0.5),0,255)
 	local b = math.clamp(math.floor((c.B or 0)*255+0.5),0,255)
-	return string.format("#%02X%02X%02%X", r, g, b)
+	return string.format("#%02X%02X%02X", r, g, b)
 end
 
 local ACCENT_HEX = color_to_hex(lib.Scheme.AccentColor or Color3.fromRGB(157,125,255))
