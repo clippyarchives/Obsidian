@@ -201,14 +201,16 @@ local function extract_answer(data)
     if type(data.output_text) == "string" and #data.output_text > 0 then return data.output_text end
     if type(data.output) == "table" then
         for _, item in ipairs(data.output) do
-            if item and item.type == "message" and type(item.content) == "table" then
-                for _, c in ipairs(item.content) do
+            local cont = item and item.content
+            if type(cont) == "table" then
+                for _, c in ipairs(cont) do
                     if type(c) == "table" then
                         if c.type == "output_text" and type(c.text) == "string" and #c.text > 0 then
                             return c.text
                         end
-                        if c.type == "text" and c.text and c.text.value then
-                            return tostring(c.text.value)
+                        if c.type == "text" then
+                            local t = (type(c.text)=="table" and (c.text.value or c.text)) or (type(c.text)=="string" and c.text)
+                            if type(t) == "string" and #t > 0 then return t end
                         end
                     end
                 end
@@ -217,6 +219,9 @@ local function extract_answer(data)
     end
     if type(data.choices) == "table" and data.choices[1] and data.choices[1].message and type(data.choices[1].message.content) == "string" then
         return data.choices[1].message.content
+    end
+    if type(data.message) == "table" and type(data.message.content) == "string" and #data.message.content > 0 then
+        return data.message.content
     end
     return nil
 end
@@ -295,7 +300,10 @@ local function attach(win, opt)
             for _, e in ipairs(getgenv().mcp_servers) do
                 if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
                     local label = tostring(e.label or ("srv"..tostring(_)))
-                    table.insert(tools, { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" })
+                    local tool = { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" }
+                    if type(e.headers) == "table" then tool.headers = e.headers end
+                    if type(e.allowed_tools) == "table" then tool.allowed_tools = e.allowed_tools end
+                    table.insert(tools, tool)
                 end
             end
         end
