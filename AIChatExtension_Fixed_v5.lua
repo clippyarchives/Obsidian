@@ -20,7 +20,17 @@ end
 
 local ACCENT_HEX = color_to_hex(lib.Scheme.AccentColor or Color3.fromRGB(157,125,255))
 
-local function add_lbl(parent, txt)
+local function get_style()
+    local s = getgenv().obs_chat_style or {}
+    s.ai_color = s.ai_color or Color3.fromRGB(180,220,255)
+    s.user_color = s.user_color or Color3.fromRGB(220,220,220)
+    if s.use_model_prefix == nil then s.use_model_prefix = true end
+    s.ai_label = s.ai_label or "AI"
+    getgenv().obs_chat_style = s
+    return s
+end
+
+local function add_lbl(parent, txt, color)
     local l = Instance.new("TextLabel")
     l.BackgroundColor3 = lib.Scheme.BackgroundColor
     l.TextXAlignment = Enum.TextXAlignment.Left
@@ -28,7 +38,7 @@ local function add_lbl(parent, txt)
     l.TextWrapped = true
     l.FontFace = lib.Scheme.Font
     l.TextSize = 14
-    l.TextColor3 = lib.Scheme.FontColor
+    l.TextColor3 = color or lib.Scheme.FontColor
     l.AutomaticSize = Enum.AutomaticSize.Y
     l.Size = UDim2.new(1,-12,0,0)
     l.Text = txt
@@ -37,17 +47,22 @@ local function add_lbl(parent, txt)
     return l
 end
 
-local function add_line_with_prefix(parent, prefix_kind, body)
+local function add_line_with_prefix(parent, prefix_kind, body, model)
+    local s = get_style()
+    local color = lib.Scheme.FontColor
     local txt
     if prefix_kind == "ai" then
-        txt = "AI > "..(body or "")
+        local pref = s.use_model_prefix and (tostring(model or "AI") .. " > ") or (tostring(s.ai_label) .. " > ")
+        txt = pref .. (body or "")
+        color = s.ai_color or color
     else
         local dn = "user"
         local lp = Players.LocalPlayer
         if lp and lp.DisplayName and lp.DisplayName ~= "" then dn = lp.DisplayName end
         txt = "["..dn.."] > "..(body or "")
+        color = s.user_color or color
     end
-    local l = add_lbl(parent, txt)
+    local l = add_lbl(parent, txt, color)
     return l
 end
 
@@ -324,6 +339,12 @@ local function attach(win, opt)
                 table.insert(m, { role = "system", content = "game script: "..path.."\n```lua\n"..scripts_store[inst].."\n```" })
             end
         end
+        local mem = getgenv().obs_mem
+        if mem and mem.enabled and type(mem.chat) == "table" and #mem.chat > 0 then
+            local memtxt = {}
+            for _,m in ipairs(mem.chat) do table.insert(memtxt, string.format("%s: %s", m.role, tostring(m.content or ""))) end
+            table.insert(m, 1, { role = "system", content = "chat memory:\n"..table.concat(memtxt, "\n") })
+        end
         return m
     end
 
@@ -339,28 +360,6 @@ local function attach(win, opt)
             setclipboard(src)
             lib:Notify("copied",2)
         end
-    end
-
-    local function flatten_messages_to_prompt(msgs)
-        local t = {}
-        for _,m in ipairs(msgs) do table.insert(t, m.content or "") end
-        return table.concat(t, "\n\n")
-    end
-
-    local function build_mcp_tools()
-        local tools = {}
-        if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
-            for idx, e in ipairs(getgenv().mcp_servers) do
-                if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
-                    local label = sanitize_label(e.label or ("srv"..tostring(idx)))
-                    local tool = { type = "mcp", server_label = label, server_url = normalize_mcp_url(e.url), require_approval = e.require_approval or e.req or "never" }
-                    local hdr = normalize_headers(e.headers)
-                    if hdr then tool.headers = hdr end
-                    table.insert(tools, tool)
-                end
-            end
-        end
-        return tools
     end
 
     local tab = win:AddKeyTab("AI Chat")
@@ -736,21 +735,43 @@ local function attach(win, opt)
             if not a then
                 local tail = text:sub(i)
                 if tail ~= "" then
-                    if not prefixed then add_line_with_prefix(box, "ai", tail); prefixed = true else add_lbl(box, tail) end
+                    if not prefixed then add_line_with_prefix(box, "ai", tail, model); prefixed = true else add_lbl(box, tail) end
                 elseif not prefixed then
-                    add_line_with_prefix(box, "ai", "")
+                    add_line_with_prefix(box, "ai", "", model)
                     prefixed = true
                 end
                 break
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then
-                if not prefixed then add_line_with_prefix(box, "ai", pre); prefixed = true else add_lbl(box, pre) end
+                if not prefixed then add_line_with_prefix(box, "ai", pre, model); prefixed = true else add_lbl(box, pre) end
             elseif not prefixed then
-                add_line_with_prefix(box, "ai", "")
+                add_line_with_prefix(box, "ai", "", model)
                 prefixed = true
             end
-            add_script(seg)
+            local codebtn = Instance.new("TextButton")
+            codebtn.AutoButtonColor = true
+            codebtn.BackgroundColor3 = lib.Scheme.MainColor
+            codebtn.BorderColor3 = lib.Scheme.OutlineColor
+            codebtn.TextXAlignment = Enum.TextXAlignment.Left
+            codebtn.TextYAlignment = Enum.TextYAlignment.Top
+            codebtn.TextWrapped = true
+            codebtn.FontFace = lib.Scheme.Font
+            codebtn.TextSize = 14
+            codebtn.TextColor3 = (get_style().ai_color or lib.Scheme.FontColor)
+            codebtn.AutomaticSize = Enum.AutomaticSize.Y
+            codebtn.Size = UDim2.new(1,-12,0,0)
+            codebtn.Parent = box
+            local pad = Instance.new("UIPadding")
+            pad.PaddingLeft = UDim.new(0,8)
+            pad.PaddingRight = UDim.new(0,8)
+            pad.PaddingTop = UDim.new(0,6)
+            pad.PaddingBottom = UDim.new(0,6)
+            pad.Parent = codebtn
+            local norm = add_code_block(codebtn, seg)
+            codebtn.MouseButton1Click:Connect(function()
+                insert_code(norm)
+            end)
             i = b + 1
         end
     end
@@ -783,9 +804,24 @@ local function attach(win, opt)
 
         local want_mcp = (getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true)
 
+        local model_name = model
+
         if use_web or want_mcp then
-            local tools = build_mcp_tools()
-            if use_web then table.insert(tools, 1, { type = "web_search_preview" }) end
+            local tools = {}
+            if use_web then table.insert(tools, { type = "web_search_preview" }) end
+            local function mcp_tools()
+                if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
+                    for idx, e in ipairs(getgenv().mcp_servers) do
+                        if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
+                            local label = (tostring(e.label or ("srv"..tostring(idx))))
+                            local hdr = nil
+                            if type(e.headers) == "table" then hdr = e.headers end
+                            table.insert(tools, { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never", headers = hdr })
+                        end
+                    end
+                end
+            end
+            mcp_tools()
             local prompt = flatten_messages_to_prompt(base)
             local body = { model = model, tools = tools, input = prompt }
             local success, result = pcall(function()
@@ -858,7 +894,7 @@ local function attach(win, opt)
         end
         
         waitlbl:Destroy()
-        render_reply(out)
+        render_reply(out, model_name)
         busy = false
 
         local mem = getgenv().obs_mem
@@ -883,5 +919,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v10")
+print("ai_chat_ext v11")
 return { attach = attach }
