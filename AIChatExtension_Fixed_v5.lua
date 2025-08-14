@@ -283,6 +283,25 @@ local function attach(win, opt)
         end
     end
 
+    local function flatten_messages_to_prompt(msgs)
+        local t = {}
+        for _,m in ipairs(msgs) do table.insert(t, m.content or "") end
+        return table.concat(t, "\n\n")
+    end
+
+    local function build_mcp_tools()
+        local tools = {}
+        if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
+            for _, e in ipairs(getgenv().mcp_servers) do
+                if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
+                    local label = tostring(e.label or ("srv"..tostring(_)))
+                    table.insert(tools, { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" })
+                end
+            end
+        end
+        return tools
+    end
+
     local tab = win:AddKeyTab("AI Chat")
 
     local holder = Instance.new("Frame")
@@ -701,14 +720,15 @@ local function attach(win, opt)
         local out = "request failed"
         local k = get_current_key()
 
-        if use_web then
-            local ctx = {}
-            for _,m in ipairs(base) do table.insert(ctx, m.content or "") end
-            local prompt = table.concat(ctx, "\n\n")
-            local body = { model = model, tools = { { type = "web_search_preview" } }, input = prompt }
-            if getgenv().mcp_github_url then
-                body.mcp = { servers = { github = { transport = "http", url = getgenv().mcp_github_url } } }
-            end
+        local want_mcp = (getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true)
+
+        if use_web or want_mcp then
+            local tools = {}
+            if use_web then table.insert(tools, { type = "web_search_preview" }) end
+            local extra = build_mcp_tools()
+            for i=1,#extra do tools[#tools+1] = extra[i] end
+            local prompt = flatten_messages_to_prompt(base)
+            local body = { model = model, tools = tools, input = prompt }
             local success, result = pcall(function()
                 return request({
                     Url = "https://api.openai.com/v1/responses";
