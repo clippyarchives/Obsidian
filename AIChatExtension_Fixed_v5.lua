@@ -229,6 +229,26 @@ local function extract_answer(data)
     return nil
 end
 
+local function sanitize_label(s)
+    s = tostring(s or "srv")
+    s = s:gsub("^[^A-Za-z]+", "x")
+    s = s:gsub("[^A-Za-z0-9_%-%]", "-")
+    s = s:gsub("%-+", "-")
+    return s
+end
+
+local function normalize_mcp_url(u)
+    if type(u) ~= "string" then return u end
+    local slug = u:match("^https?://smithery%.ai/server/(.+)$")
+    if slug then
+        return "https://server.smithery.ai/"..slug.."/mcp"
+    end
+    if u:match("^https?://server%.smithery%.ai/.+") and (not u:find("/mcp$")) then
+        return u.."/mcp"
+    end
+    return u
+end
+
 local function is_array(t)
     if type(t) ~= "table" then return false end
     local n = 0
@@ -243,9 +263,7 @@ local function normalize_headers(h)
     if type(h) ~= "table" then return nil end
     if not is_array(h) then
         local has_kv = false
-        for k,v in pairs(h) do
-            if type(k) ~= "number" then has_kv = true break end
-        end
+        for k,_ in pairs(h) do if type(k) ~= "number" then has_kv = true break end end
         return has_kv and h or nil
     end
     local obj = {}
@@ -332,10 +350,10 @@ local function attach(win, opt)
     local function build_mcp_tools()
         local tools = {}
         if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
-            for _, e in ipairs(getgenv().mcp_servers) do
+            for idx, e in ipairs(getgenv().mcp_servers) do
                 if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
-                    local label = tostring(e.label or ("srv"..tostring(_)))
-                    local tool = { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" }
+                    local label = sanitize_label(e.label or ("srv"..tostring(idx)))
+                    local tool = { type = "mcp", server_label = label, server_url = normalize_mcp_url(e.url), require_approval = e.require_approval or e.req or "never" }
                     local hdr = normalize_headers(e.headers)
                     if hdr then tool.headers = hdr end
                     table.insert(tools, tool)
@@ -850,5 +868,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v7")
+print("ai_chat_ext v8")
 return { attach = attach }
