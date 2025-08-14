@@ -232,7 +232,7 @@ end
 local function sanitize_label(s)
     s = tostring(s or "srv")
     s = s:gsub("^[^A-Za-z]+", "x")
-    s = s:gsub("[^A-Za-z0-9_%-%]", "-")
+    s = s:gsub("[^%w_%-]", "-")
     s = s:gsub("%-+", "-")
     return s
 end
@@ -868,5 +868,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v8")
+print("ai_chat_ext v9")
 return { attach = attach }
