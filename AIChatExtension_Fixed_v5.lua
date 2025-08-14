@@ -42,28 +42,27 @@ local function add_lbl(parent, txt, color)
     l.AutomaticSize = Enum.AutomaticSize.Y
     l.Size = UDim2.new(1,-12,0,0)
     l.Text = txt
-    l.RichText = false
+    l.RichText = true
     l.Parent = parent
     return l
 end
 
 local function add_line_with_prefix(parent, prefix_kind, body, model)
     local s = get_style()
-    local color = lib.Scheme.FontColor
-    local txt
+    local baseCol = lib.Scheme.FontColor
+    local pfx, pfxCol
     if prefix_kind == "ai" then
-        local pref = s.use_model_prefix and (tostring(model or "AI") .. " > ") or (tostring(s.ai_label) .. " > ")
-        txt = pref .. (body or "")
-        color = s.ai_color or color
+        pfx = s.use_model_prefix and (tostring(model or "AI") .. " > ") or (tostring(s.ai_label) .. " > ")
+        pfxCol = s.ai_color or baseCol
     else
         local dn = "user"
         local lp = Players.LocalPlayer
         if lp and lp.DisplayName and lp.DisplayName ~= "" then dn = lp.DisplayName end
-        txt = "["..dn.."] > "..(body or "")
-        color = s.user_color or color
+        pfx = "["..dn.."] > "
+        pfxCol = s.user_color or baseCol
     end
-    local l = add_lbl(parent, txt, color)
-    return l
+    local txt = string.format("<font color=\"%s\">%s</font>%s", color_to_hex(pfxCol), pfx, tostring(body or ""))
+    return add_lbl(parent, txt, baseCol)
 end
 
 local function add_code_block(gui, code)
@@ -727,7 +726,7 @@ local function attach(win, opt)
     gLeft:AddButton({ Text = "Refresh Scripts"; Func = rebuild_game_scripts });
     rebuild_game_scripts();
 
-    local function render_reply(text)
+    local function render_reply(text, model_name)
         local prefixed = false
         local i = 1
         while true do
@@ -735,18 +734,18 @@ local function attach(win, opt)
             if not a then
                 local tail = text:sub(i)
                 if tail ~= "" then
-                    if not prefixed then add_line_with_prefix(box, "ai", tail, model); prefixed = true else add_lbl(box, tail) end
+                    if not prefixed then add_line_with_prefix(box, "ai", tail, model_name); prefixed = true else add_lbl(box, tail) end
                 elseif not prefixed then
-                    add_line_with_prefix(box, "ai", "", model)
+                    add_line_with_prefix(box, "ai", "", model_name)
                     prefixed = true
                 end
                 break
             end
             local pre = text:sub(i, a-1)
             if pre ~= "" then
-                if not prefixed then add_line_with_prefix(box, "ai", pre, model); prefixed = true else add_lbl(box, pre) end
+                if not prefixed then add_line_with_prefix(box, "ai", pre, model_name); prefixed = true else add_lbl(box, pre) end
             elseif not prefixed then
-                add_line_with_prefix(box, "ai", "", model)
+                add_line_with_prefix(box, "ai", "", model_name)
                 prefixed = true
             end
             local codebtn = Instance.new("TextButton")
@@ -758,7 +757,7 @@ local function attach(win, opt)
             codebtn.TextWrapped = true
             codebtn.FontFace = lib.Scheme.Font
             codebtn.TextSize = 14
-            codebtn.TextColor3 = (get_style().ai_color or lib.Scheme.FontColor)
+            codebtn.TextColor3 = lib.Scheme.FontColor
             codebtn.AutomaticSize = Enum.AutomaticSize.Y
             codebtn.Size = UDim2.new(1,-12,0,0)
             codebtn.Parent = box
@@ -919,5 +918,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v11")
+print("ai_chat_ext v12")
 return { attach = attach }
