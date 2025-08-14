@@ -15,15 +15,14 @@ end
 local function join_chat(mem)
 	local lines = {}
 	for _,m in ipairs(mem.chat) do
-		local p = (m.role == "assistant" and "ai" or "user") .. ": " .. tostring(m.content or "")
-		table.insert(lines, p)
+		table.insert(lines, ((m.role == "assistant" and "ai" or "user") .. ": " .. tostring(m.content or "")))
 	end
 	return table.concat(lines, "\n")
 end
 
 local function attach(win)
 	local mem = ensure_mem()
-	local tab = win:AddKeyTab("AI Memory")
+	local tab = win:AddTab("AI Memory", "database")
 
 	local left = tab:AddLeftGroupbox("Controls")
 	local right = tab:AddRightGroupbox("Current Context")
@@ -44,10 +43,11 @@ local function attach(win)
 		ctxBox:SetText("last built context sent to ai:\n"..ctx)
 	end
 
+	getgenv().obs_mem_refresh = refresh
 	refresh()
 
 	return { tab = tab, refresh = refresh }
 end
 
-print("ai_memory_ext v1")
+print("ai_memory_ext v2")
 return { attach = attach }
