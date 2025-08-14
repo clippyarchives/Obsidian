@@ -15,7 +15,7 @@ local function color_to_hex(c)
 	local r = math.clamp(math.floor((c.R or 0)*255+0.5),0,255)
 	local g = math.clamp(math.floor((c.G or 0)*255+0.5),0,255)
 	local b = math.clamp(math.floor((c.B or 0)*255+0.5),0,255)
-	return string.format("#%02X%02X%02X", r, g, b)
+	return string.format("#%02X%02X%02%X", r, g, b)
 end
 
 local ACCENT_HEX = color_to_hex(lib.Scheme.AccentColor or Color3.fromRGB(157,125,255))
@@ -305,6 +305,36 @@ local function flatten_messages_to_prompt(msgs)
 	return table.concat(buf, "\n\n")
 end
 
+local function get_rules_save_path()
+	local base = "Obsidian"
+	local sm = rawget(lib, "SaveManager")
+	if sm and type(sm.Folder) == "string" and sm.Folder ~= "" then
+		base = sm.Folder
+	elseif type(lib.Folder) == "string" and lib.Folder ~= "" then
+		base = lib.Folder
+	end
+	pcall(function()
+		if not isfolder(base) then makefolder(base) end
+	end)
+	return base.."/ai_rules.json"
+end
+
+local function save_rules_to_disk(tbl)
+	local ok, data = pcall(function() return hs:JSONEncode(tbl) end)
+	if not ok then return end
+	local path = get_rules_save_path()
+	pcall(function() writefile(path, data) end)
+end
+
+local function load_rules_from_disk()
+	local path = get_rules_save_path()
+	local ok, data = pcall(function() return readfile(path) end)
+	if not ok or type(data) ~= "string" or #data == 0 then return nil end
+	local ok2, obj = pcall(function() return hs:JSONDecode(data) end)
+	if not ok2 or type(obj) ~= "table" then return nil end
+	return obj
+end
+
 local function attach(win, opt)
 	opt = opt or {}
 	local key = opt.key or ""
@@ -317,6 +347,11 @@ local function attach(win, opt)
 		"when output includes code, wrap the code in fenced code blocks (```lua ... ```); do not add unrelated notes unless asked"
 	}
 	local user_rules = {}
+
+	local persisted = load_rules_from_disk()
+	if persisted and type(persisted.user_rules) == "table" then
+		user_rules = persisted.user_rules
+	end
 
 	local scripts_store = {}
 	local services_selected = {}
@@ -515,17 +550,23 @@ local function attach(win, opt)
 		for _,r in ipairs(user_rules) do idx = idx + 1; add_lbl(rbox, tostring(idx)..". "..r) end
 	end
 
+	local function persist_rules()
+		save_rules_to_disk({ user_rules = user_rules })
+	end
+
 	radd.MouseButton1Click:Connect(function()
 		local t = rinp.Text
 		if t=="" then return end
 		rinp.Text = ""
 		table.insert(user_rules, t)
 		refresh_rules()
+		persist_rules()
 	end)
 
 	rclear.MouseButton1Click:Connect(function()
 		user_rules = {}
 		refresh_rules()
+		persist_rules()
 	end)
 
 	refresh_rules()
