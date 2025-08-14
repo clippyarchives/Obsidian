@@ -293,6 +293,18 @@ local function normalize_headers(h)
 	return obj
 end
 
+local function flatten_messages_to_prompt(msgs)
+	local buf = {}
+	for _,m in ipairs(msgs or {}) do
+		local role = tostring(m.role or "system")
+		local content = tostring(m.content or "")
+		if content ~= "" then
+			table.insert(buf, role..": "..content)
+		end
+	end
+	return table.concat(buf, "\n\n")
+end
+
 local function attach(win, opt)
 	opt = opt or {}
 	local key = opt.key or ""
@@ -350,7 +362,7 @@ local function attach(win, opt)
 	end
 
 	local function insert_code(src)
-		if ide and ide.GetText and ide.SetText then
+		if ide and type(ide) == "table" and ide.GetText and ide.SetText then
 			local cur = ide:GetText() or ""
 			ide:SetText((#cur>0 and (cur.."\n") or "") .. src)
 			lib:Notify("added to ide",2)
@@ -525,6 +537,7 @@ local function attach(win, opt)
 	local preview = svcBoxRight:AddLabel({ Text = "", DoesWrap = true })
 
 	local function update_preview()
+		if not preview or not preview.SetText then return end
 		local ctx = build_service_context(services_selected, filter)
 		preview:SetText(ctx == "" and "no services selected" or ctx)
 	end
