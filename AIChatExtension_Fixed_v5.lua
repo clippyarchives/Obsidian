@@ -239,6 +239,22 @@ local function attach(win, opt)
 
     local include_game_scripts = {}
 
+    local function get_current_key()
+        local v = ""
+        local opts = lib.Options
+        if opts and opts.OpenAIKey and typeof(opts.OpenAIKey.Value) == "string" and opts.OpenAIKey.Value ~= "" then
+            v = opts.OpenAIKey.Value
+        elseif typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
+            v = getgenv().ai_key
+        elseif typeof(key) == "string" then
+            v = key
+        end
+        if type(v) == "string" then
+            return (v:gsub("^%s+","")):gsub("%s+$","")
+        end
+        return ""
+    end
+
     local function build_messages()
         local m = {}
         for _,r in ipairs(rules) do table.insert(m,{role="system",content=r}) end
@@ -516,7 +532,6 @@ local function attach(win, opt)
     local currentInst
     local aiToggle
 
-    -- Full script viewer (scrollable)
     local pvHolder = Instance.new("Frame")
     pvHolder.BackgroundTransparency = 1
     pvHolder.Size = UDim2.new(1,0,0,300)
@@ -684,6 +699,7 @@ local function attach(win, opt)
         busy = true
         
         local out = "request failed"
+        local k = get_current_key()
 
         if use_web then
             local ctx = {}
@@ -697,7 +713,7 @@ local function attach(win, opt)
                 return request({
                     Url = "https://api.openai.com/v1/responses";
                     Method = "POST";
-                    Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..key; };
+                    Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..k; };
                     Body = hs:JSONEncode(body);
                 })
             end)
@@ -720,7 +736,7 @@ local function attach(win, opt)
                     Method = "POST"; 
                     Headers = { 
                         ["Content-Type"] = "application/json"; 
-                        ["Authorization"] = "Bearer "..key; 
+                        ["Authorization"] = "Bearer "..k; 
                     }; 
                     Body = hs:JSONEncode({ 
                         model = model; 
