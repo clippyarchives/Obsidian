@@ -323,23 +323,24 @@ local function attach(win, opt)
         return table.concat(t, "\n\n")
     end
 
-    local function build_mcp_tools()
+    local function build_mcp_tools_and_config()
         local tools = {}
+        local cfg = { servers = {} }
         if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
             for _, e in ipairs(getgenv().mcp_servers) do
                 if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
                     local label = tostring(e.label or ("srv"..tostring(_)))
-                    local tool = { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" }
-                    if type(e.headers) == "table" then
-                        local hdr = normalize_headers(e.headers)
-                        if hdr then tool.headers = hdr end
-                    end
-                    if type(e.allowed_tools) == "table" then tool.allowed_tools = e.allowed_tools end
-                    table.insert(tools, tool)
+                    table.insert(tools, { type = "mcp", server_label = label, server_url = e.url, require_approval = e.require_approval or e.req or "never" })
+                    local srv = { transport = e.transport or "http", url = e.url }
+                    local hdr = nil
+                    if type(e.headers) == "table" then hdr = normalize_headers(e.headers) end
+                    if hdr then srv.headers = hdr end
+                    cfg.servers[label] = srv
                 end
             end
         end
-        return tools
+        if next(cfg.servers) == nil then cfg = nil end
+        return tools, cfg
     end
 
     local tab = win:AddKeyTab("AI Chat")
@@ -763,12 +764,11 @@ local function attach(win, opt)
         local want_mcp = (getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true)
 
         if use_web or want_mcp then
-            local tools = {}
-            if use_web then table.insert(tools, { type = "web_search_preview" }) end
-            local extra = build_mcp_tools()
-            for i=1,#extra do tools[#tools+1] = extra[i] end
+            local tools, mcp_cfg = build_mcp_tools_and_config()
+            if use_web then table.insert(tools, 1, { type = "web_search_preview" }) end
             local prompt = flatten_messages_to_prompt(base)
             local body = { model = model, tools = tools, input = prompt }
+            if mcp_cfg then body.mcp = mcp_cfg end
             local success, result = pcall(function()
                 return request({
                     Url = "https://api.openai.com/v1/responses";
@@ -849,4 +849,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
+print("ai_chat_ext v6")
 return { attach = attach }
