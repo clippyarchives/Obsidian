@@ -585,20 +585,10 @@ local function attach(win, opt)
         pad.PaddingTop = UDim.new(0,6)
         pad.PaddingBottom = UDim.new(0,6)
         pad.Parent = codebtn
-        local norm = add_code_block(codebtn, code)
+        local norm = code
+        codebtn.Text = norm
+        codebtn.RichText = false
         codebtn.MouseButton1Click:Connect(function()
-            insert_code(norm)
-        end)
-        local ins = Instance.new("TextButton")
-        ins.BackgroundColor3 = lib.Scheme.MainColor
-        ins.BorderColor3 = lib.Scheme.OutlineColor
-        ins.Text = "insert"
-        ins.FontFace = lib.Scheme.Font
-        ins.TextSize = 14
-        ins.TextColor3 = lib.Scheme.FontColor
-        ins.Size = UDim2.new(0,96,0,28)
-        ins.Parent = sbox
-        ins.MouseButton1Click:Connect(function()
             insert_code(norm)
         end)
     end
@@ -748,29 +738,7 @@ local function attach(win, opt)
                 add_line_with_prefix(box, "ai", "", model_name)
                 prefixed = true
             end
-            local codebtn = Instance.new("TextButton")
-            codebtn.AutoButtonColor = true
-            codebtn.BackgroundColor3 = lib.Scheme.MainColor
-            codebtn.BorderColor3 = lib.Scheme.OutlineColor
-            codebtn.TextXAlignment = Enum.TextXAlignment.Left
-            codebtn.TextYAlignment = Enum.TextYAlignment.Top
-            codebtn.TextWrapped = true
-            codebtn.FontFace = lib.Scheme.Font
-            codebtn.TextSize = 14
-            codebtn.TextColor3 = lib.Scheme.FontColor
-            codebtn.AutomaticSize = Enum.AutomaticSize.Y
-            codebtn.Size = UDim2.new(1,-12,0,0)
-            codebtn.Parent = box
-            local pad = Instance.new("UIPadding")
-            pad.PaddingLeft = UDim.new(0,8)
-            pad.PaddingRight = UDim.new(0,8)
-            pad.PaddingTop = UDim.new(0,6)
-            pad.PaddingBottom = UDim.new(0,6)
-            pad.Parent = codebtn
-            local norm = add_code_block(codebtn, seg)
-            codebtn.MouseButton1Click:Connect(function()
-                insert_code(norm)
-            end)
+            local norm = seg:gsub("^%s*[%w%-_]*\n", "", 1)
             add_script(norm)
             i = b + 1
         end
@@ -919,5 +887,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v13")
+print("ai_chat_ext v14")
 return { attach = attach }
