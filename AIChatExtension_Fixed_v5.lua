@@ -314,7 +314,7 @@ local function attach(win, opt)
 
 	local base_rules = {
 		sys,
-		"return all code inside fenced code blocks (```lua ... ```). also tell the user that scripts are saved in the 'AI Scripts' tab where they can insert them into the IDE"
+		"when output includes code, wrap the code in fenced code blocks (```lua ... ```); do not add unrelated notes unless asked"
 	}
 	local user_rules = {}
 
