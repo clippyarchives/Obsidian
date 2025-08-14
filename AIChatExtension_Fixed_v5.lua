@@ -860,6 +860,21 @@ local function attach(win, opt)
         waitlbl:Destroy()
         render_reply(out)
         busy = false
+
+        local mem = getgenv().obs_mem
+        if mem and mem.enabled then
+            local function push(role, content)
+                table.insert(mem.chat, { role = role, content = content })
+                while #mem.chat > (tonumber(mem.max_turns) or 10) * 2 do table.remove(mem.chat, 1) end
+            end
+            push("user", q)
+            push("assistant", out)
+        end
+
+        local msgs = {}
+        for _,m in ipairs(base) do table.insert(msgs, m.content or "") end
+        getgenv().obs_last_context_text = table.concat(msgs, "\n\n")
+        if type(getgenv().obs_mem_refresh) == "function" then pcall(getgenv().obs_mem_refresh) end
     end
 
     btn.MouseButton1Click:Connect(send)
@@ -868,5 +883,5 @@ local function attach(win, opt)
     return { tab = tab }
 end
 
-print("ai_chat_ext v9")
+print("ai_chat_ext v10")
 return { attach = attach }
