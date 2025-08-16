@@ -261,11 +261,55 @@ local function extract_anthropic_text(obj)
 	return table.concat(buf, "\n")
 end
 
+local function sanitize_label(s)
+	s = tostring(s or "srv")
+	s = s:gsub("^[^A-Za-z]+", "x")
+	s = s:gsub("[^%w_%-]", "-")
+	s = s:gsub("%-+", "-")
+	return s
+end
 
+local function normalize_mcp_url(u)
+	if type(u) ~= "string" then return u end
+	local slug = u:match("^https?://smithery%.ai/server/(.+)$")
+	if slug then
+		return "https://server.smithery.ai/"..slug.."/mcp"
+	end
+	if u:match("^https?://server%.smithery%.ai/.+") and (not u:find("/mcp$")) then
+		return u.."/mcp"
+	end
+	return u
+end
 
+local function is_array(t)
+	if type(t) ~= "table" then return false end
+	local n = 0
+	for k,_ in pairs(t) do
+		if type(k) ~= "number" then return false end
+		n = n + 1
+	end
+	return n == #t and n > 0
+end
 
-
-
+local function normalize_headers(h)
+	if type(h) ~= "table" then return nil end
+	if not is_array(h) then
+		local has_kv = false
+		for k,_ in pairs(h) do if type(k) ~= "number" then has_kv = true break end end
+		return has_kv and h or nil
+	end
+	local obj = {}
+	for _,v in ipairs(h) do
+		if type(v) == "table" then
+			for kk,vv in pairs(v) do obj[tostring(kk)] = tostring(vv) end
+		elseif type(v) == "string" then
+			local k, val = string.match(v, "^%s*([^:=%s]+)%s*[:=]%s*(.+)$")
+			if k and val then obj[k] = val end
+		end
+	end
+	if next(obj) == nil then return nil end
+	return obj
+end
 
 local function flatten_messages_to_prompt(msgs)
 	local buf = {}
@@ -863,10 +907,26 @@ local function attach(win, opt)
 		local model_name = get_current_model(prov)
 		local k = get_provider_key(prov)
 
+		local want_mcp = false
+		if typeof(getgenv().mcp_use_in_chat) == "boolean" and getgenv().mcp_enabled == true then want_mcp = getgenv().mcp_use_in_chat end
+
 		if prov == "openai" then
-			if use_web then
+			if use_web or want_mcp then
 				local tools = {}
-				table.insert(tools, { type = "web_search_preview" })
+				if use_web then table.insert(tools, { type = "web_search_preview" }) end
+				local function mcp_tools()
+					if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
+						for idx, e in ipairs(getgenv().mcp_servers) do
+							if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
+								local label = (tostring(e.label or ("srv"..tostring(idx))))
+								local url = normalize_mcp_url(e.url)
+								local hdr = normalize_headers(e.headers)
+								table.insert(tools, { type = "mcp", server_label = label, server_url = url, require_approval = e.require_approval or e.req or "never", headers = hdr })
+							end
+						end
+					end
+				end
+				mcp_tools()
 				local prompt = flatten_messages_to_prompt(base)
 				local body = { model = model_name, tools = tools, input = prompt }
 				local success, result = pcall(function()
