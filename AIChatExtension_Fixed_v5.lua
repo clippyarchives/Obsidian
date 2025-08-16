@@ -407,12 +407,6 @@ local function attach(win, opt)
 		return p
 	end
 
-	local models_by_provider = {
-		openai = { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-3.5-turbo" },
-		anthropic = { "claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307" },
-		google = { "gemini-1.5-pro", "gemini-1.5-flash" }
-	}
-
 	local function default_model_for_provider(p)
 		if p == "anthropic" then return "claude-3-5-sonnet-20240620" end
 		if p == "google" then return "gemini-1.5-pro" end
@@ -422,7 +416,9 @@ local function attach(win, opt)
 	local function get_current_model(p)
 		local m = model
 		local opts = lib.Options
-		if opts and opts.AIModel and opts.AIModel.Value and tostring(opts.AIModel.Value) ~= "" then
+		if p == "openai" and opts and opts.OpenAIModel and opts.OpenAIModel.Value and tostring(opts.OpenAIModel.Value) ~= "" then
+			m = tostring(opts.OpenAIModel.Value)
+		elseif opts and opts.AIModel and opts.AIModel.Value and tostring(opts.AIModel.Value) ~= "" then
 			m = tostring(opts.AIModel.Value)
 		elseif m == "" or m == nil then
 			m = default_model_for_provider(p)
@@ -518,6 +514,7 @@ local function attach(win, opt)
 	local opts = lib.Options or {}
 	local use_web = false
 	if opts.AIEnableWeb and typeof(opts.AIEnableWeb.Value) == "boolean" then use_web = opts.AIEnableWeb.Value end
+	if typeof(getgenv().ai_enable_web) == "boolean" then use_web = getgenv().ai_enable_web end
 
 	local web = Instance.new("TextButton")
 	web.BackgroundColor3 = lib.Scheme.MainColor
@@ -540,6 +537,7 @@ local function attach(win, opt)
 		end
 		use_web = not use_web
 		web.Text = use_web and "web: on" or "web: off"
+		getgenv().ai_enable_web = use_web
 	end)
 
 	local provbtn = Instance.new("TextButton")
@@ -656,28 +654,6 @@ local function attach(win, opt)
 	end)
 
 	refresh_rules()
-
-	local settab = win:AddTab("AI Settings", "settings")
-	local pbox = settab:AddLeftGroupbox("Provider")
-	local kbox = settab:AddRightGroupbox("Keys")
-	local fbox = settab:AddRightGroupbox("Features")
-
-	local prov_dd = pbox:AddDropdown("AIProvider", { Values = {"openai","anthropic","google"}; Default = 1; Text = "Provider"; Callback = function(v) end })
-	local model_dd = pbox:AddDropdown("AIModel", { Values = models_by_provider.openai; Default = 1; Text = "Model"; Callback = function(v) end })
-
-	prov_dd:OnChanged(function(v)
-		local p = tostring(v)
-		local lst = models_by_provider[p] or models_by_provider.openai
-		model_dd:SetValues(lst)
-		model_dd:SetValue(lst[1])
-	end)
-
-	kbox:AddInput("OpenAIKey", { Text = "OpenAI Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
-	kbox:AddInput("AnthropicKey", { Text = "Anthropic Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
-	kbox:AddInput("GeminiKey", { Text = "Gemini Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
-
-	fbox:AddToggle("AIEnableWeb", { Text = "Enable Web Search (OpenAI)"; Default = use_web; Callback = function(v) use_web = v; web.Text = use_web and "web: on" or "web: off" end })
-	fbox:AddToggle("AIEnableMCP", { Text = "Enable MCP Tools"; Default = false; Callback = function(v) getgenv().mcp_use_in_chat = v end })
 
 	local svctab = win:AddTab("Services", "server")
 	local svcBoxLeft = svctab:AddLeftGroupbox("Services")
@@ -940,7 +916,7 @@ local function attach(win, opt)
 
 		local want_mcp = false
 		if opts.AIEnableMCP and typeof(opts.AIEnableMCP.Value) == "boolean" then want_mcp = opts.AIEnableMCP.Value end
-		if getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true then want_mcp = true end
+		if typeof(getgenv().mcp_use_in_chat) == "boolean" and getgenv().mcp_enabled == true then want_mcp = getgenv().mcp_use_in_chat end
 
 		if prov == "openai" then
 			if use_web or want_mcp then
@@ -1125,5 +1101,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.1")
+print("ai_chat_ext v15.2")
 return { attach = attach }
