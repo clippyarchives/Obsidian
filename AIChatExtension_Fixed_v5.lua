@@ -529,15 +529,9 @@ local function attach(win, opt)
 
 	web.MouseButton1Click:Connect(function()
 		local p = get_current_provider()
-		if p ~= "openai" then
-			use_web = false
-			web.Text = "web: off"
-			lib:Notify("web supported for openai only",2)
-			return
-		end
 		use_web = not use_web
-		web.Text = use_web and "web: on" or "web: off"
 		getgenv().ai_enable_web = use_web
+		web.Text = use_web and "web: on" or "web: off"
 	end)
 
 	local provbtn = Instance.new("TextButton")
@@ -1016,6 +1010,13 @@ local function attach(win, opt)
 				end
 			end
 			local body = { model = model_name, system = table.concat(sysParts, "\n\n"), messages = amsg, max_tokens = 1024 }
+			if getgenv().ai_enable_web then
+				local t = { { type = "web_search_20250305", name = "web_search", max_uses = tonumber(getgenv().ai_web_max_uses) }, }
+				if typeof(getgenv().ai_web_allowed_domains) == "table" then t[1].allowed_domains = getgenv().ai_web_allowed_domains end
+				if typeof(getgenv().ai_web_blocked_domains) == "table" then t[1].blocked_domains = getgenv().ai_web_blocked_domains end
+				if typeof(getgenv().ai_web_user_location) == "table" then t[1].user_location = getgenv().ai_web_user_location end
+				body.tools = t
+			end
 			local success, result = pcall(function()
 				return request({
 					Url = "https://api.anthropic.com/v1/messages";
@@ -1101,5 +1102,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.2")
+print("ai_chat_ext v15.3")
 return { attach = attach }
