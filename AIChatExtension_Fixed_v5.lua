@@ -380,46 +380,61 @@ local function attach(win, opt)
 
 	local function get_openai_key()
 		local opts = lib.Options
-		if getgenv().ai_use_default == true and typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
-			return getgenv().ai_openai_key
+		local v
+		if getgenv().ai_use_default == true then
+			v = getgenv().ai_openai_key or getgenv().ai_key
 		end
-		local v = ""
-		if opts and opts.OpenAIKey and typeof(opts.OpenAIKey.Value) == "string" and opts.OpenAIKey.Value ~= "" then
+		if (not v or v == "") and opts and opts.OpenAIKey and typeof(opts.OpenAIKey.Value) == "string" and opts.OpenAIKey.Value ~= "" then
 			v = opts.OpenAIKey.Value
-		elseif typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
+		end
+		if (not v or v == "") and typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
 			v = getgenv().ai_openai_key
-		elseif typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
+		end
+		if (not v or v == "") and typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
 			v = getgenv().ai_key
-		elseif typeof(key) == "string" then
+		end
+		if (not v or v == "") and typeof(key) == "string" then
 			v = key
 		end
-		if type(v) == "string" then
-			return (v:gsub("^%s+","")):gsub("%s+$","")
-		end
+		if type(v) == "string" then return (v:gsub("^%s+","")):gsub("%s+$","") end
 		return ""
 	end
 
 	local function get_anthropic_key()
-		if getgenv().ai_use_default == true and typeof(getgenv().ai_anthropic_key) == "string" and getgenv().ai_anthropic_key ~= "" then
-			return getgenv().ai_anthropic_key
-		end
 		local opts = lib.Options
-		if opts and opts.AnthropicKey and typeof(opts.AnthropicKey.Value) == "string" and opts.AnthropicKey.Value ~= "" then
-			return opts.AnthropicKey.Value
+		local v
+		if getgenv().ai_use_default == true then
+			v = getgenv().ai_anthropic_key or getgenv().ai_key
 		end
-		if typeof(getgenv().ai_anthropic_key) == "string" and getgenv().ai_anthropic_key ~= "" then return getgenv().ai_anthropic_key end
+		if (not v or v == "") and opts and opts.AnthropicKey and typeof(opts.AnthropicKey.Value) == "string" and opts.AnthropicKey.Value ~= "" then
+			v = opts.AnthropicKey.Value
+		end
+		if (not v or v == "") and typeof(getgenv().ai_anthropic_key) == "string" and getgenv().ai_anthropic_key ~= "" then
+			v = getgenv().ai_anthropic_key
+		end
+		if (not v or v == "") and typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
+			v = getgenv().ai_key
+		end
+		if type(v) == "string" then return (v:gsub("^%s+","")):gsub("%s+$","") end
 		return ""
 	end
 
 	local function get_gemini_key()
-		if getgenv().ai_use_default == true and typeof(getgenv().ai_gemini_key) == "string" and getgenv().ai_gemini_key ~= "" then
-			return getgenv().ai_gemini_key
-		end
 		local opts = lib.Options
-		if opts and opts.GeminiKey and typeof(opts.GeminiKey.Value) == "string" and opts.GeminiKey.Value ~= "" then
-			return opts.GeminiKey.Value
+		local v
+		if getgenv().ai_use_default == true then
+			v = getgenv().ai_gemini_key or getgenv().ai_key
 		end
-		if typeof(getgenv().ai_gemini_key) == "string" and getgenv().ai_gemini_key ~= "" then return getgenv().ai_gemini_key end
+		if (not v or v == "") and opts and opts.GeminiKey and typeof(opts.GeminiKey.Value) == "string" and opts.GeminiKey.Value ~= "" then
+			v = opts.GeminiKey.Value
+		end
+		if (not v or v == "") and typeof(getgenv().ai_gemini_key) == "string" and getgenv().ai_gemini_key ~= "" then
+			v = getgenv().ai_gemini_key
+		end
+		if (not v or v == "") and typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
+			v = getgenv().ai_key
+		end
+		if type(v) == "string" then return (v:gsub("^%s+","")):gsub("%s+$","") end
 		return ""
 	end
 
