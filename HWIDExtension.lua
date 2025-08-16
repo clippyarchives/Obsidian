@@ -36,23 +36,7 @@ local function parse_whitelist(s)
 		end
 	end
 	
-	-- Fallback to JSON array
-	if s:sub(1,1) == "[" then
-		local ok, arr = pcall(hs.JSONDecode, hs, s)
-		if ok and type(arr) == "table" then
-			local m = {}
-			for _,x in ipairs(arr) do if type(x) == "string" and x ~= "" then m[x] = true end end
-			return m
-		end
-	end
-	
-	-- Fallback to newline separated
-	local m = {}
-	for line in s:gmatch("([^\r\n]+)") do
-		local t = line:gsub("^%s+",""):gsub("%s+$","")
-		if t ~= "" and not t:match("^%-%-") and not t:match("^#") then m[t] = true end
-	end
-	return m
+	return {}
 end
 
 local function fetch(url)
@@ -71,24 +55,30 @@ local function enforce(opt)
 	local url = opt.url or "https://raw.githubusercontent.com/clippyarchives/Obsidian/feature/ide-extension/hwids.txt"
 	local dm = opt.dm or "xenon9012"
 	local hwid = get()
+	
+	if hwid == "" then
+		local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
+		nl:SendNotification('Error', 'Could not get HWID. Please dm '..dm, 5)
+		return false, ""
+	end
+	
 	local raw = fetch(url)
 	local wl = parse_whitelist(raw)
-	local cnt = 0; for _ in pairs(wl) do cnt = cnt + 1 end
-	local ok = (cnt == 0) or (wl[hwid] == true)
 	
-	if not ok then
-		if setclipboard and hwid ~= "" then
-			setclipboard(hwid)
-		end
-		
-		local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
-		if hwid ~= "" then
-			nl:SendNotification('Access Denied', 'HWID: '..hwid..' not registered. Please dm '..dm..' to be whitelisted. HWID copied to clipboard.', 8)
-		else
-			nl:SendNotification('Access Denied', 'Could not get HWID. Please dm '..dm..' for manual whitelist.', 8)
-		end
+	-- Check if HWID is in whitelist
+	if wl[hwid] then
+		return true, hwid
 	end
-	return ok, hwid
+	
+	-- Not whitelisted - copy to clipboard and show notification
+	if setclipboard then
+		setclipboard(hwid)
+	end
+	
+	local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
+	nl:SendNotification('Access Denied', 'HWID Copied, please dm '..dm..' to be whitelisted', 6)
+	
+	return false, hwid
 end
 
 return { get = get, enforce = enforce }
