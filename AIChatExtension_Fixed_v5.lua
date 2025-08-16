@@ -163,51 +163,45 @@ local function build_service_context(selected, filter)
 	return table.concat(blockLines, "\n")
 end
 
-local function find_scripts()
-	local foundScripts = {}
+local function find_scripts_by_service()
+	local scriptsByService = {}
 	local plrs = game:GetService("Players")
 	
-	local function safe_scan(container, name)
+	local function safe_scan(container, serviceName)
 		local ok, result = pcall(function()
 			if not container then return {} end
 			local scripts = {}
 			for _, child in ipairs(container:GetDescendants()) do
-				if child:IsA("LocalScript") or child:IsA("ModuleScript") then
+				if child:IsA("LocalScript") or child:IsA("ModuleScript") or child:IsA("Script") then
 					table.insert(scripts, child)
 				end
-				if #scripts > 50 then break end
+				if #scripts > 100 then break end
 			end
 			return scripts
 		end)
 		return ok and result or {}
 	end
 	
-	local containers = {
+	local targetServices = {
+		{game:GetService("Workspace"), "Workspace"},
 		{game:GetService("ReplicatedStorage"), "ReplicatedStorage"},
-		{game:GetService("StarterGui"), "StarterGui"},
-		{game:GetService("StarterPlayerScripts"), "StarterPlayerScripts"}
+		{game:GetService("StarterPlayerScripts"), "StarterPlayerScripts"},
+		{plrs, "Players"}
 	}
 	
-	if plrs.LocalPlayer then
-		local ok, playerGui = pcall(function() return plrs.LocalPlayer:FindFirstChild("PlayerGui") end)
-		if ok and playerGui then
-			table.insert(containers, {playerGui, "PlayerGui"})
-		end
+	for _, serviceData in ipairs(targetServices) do
+		local service = serviceData[1]
+		local serviceName = serviceData[2]
 		
-		local ok2, playerScripts = pcall(function() return plrs.LocalPlayer:FindFirstChild("PlayerScripts") end)
-		if ok2 and playerScripts then
-			table.insert(containers, {playerScripts, "PlayerScripts"})
+		if service then
+			local scripts = safe_scan(service, serviceName)
+			if #scripts > 0 then
+				scriptsByService[serviceName] = scripts
+			end
 		end
 	end
 	
-	for _, container in ipairs(containers) do
-		local scripts = safe_scan(container[1], container[2])
-		for _, script in ipairs(scripts) do
-			table.insert(foundScripts, script)
-		end
-	end
-	
-	return foundScripts
+	return scriptsByService
 end
 
 local function extract_answer(data)
@@ -798,11 +792,11 @@ local function attach(win, opt)
 	end
 
 	local gtab = win:AddTab("Game Scripts", "file-text")
-	local gLeft = gtab:AddLeftGroupbox("Scripts")
-	local gRight = gtab:AddRightGroupbox("Preview")
-
 	local currentInst
 	local aiToggle
+	local serviceGroupboxes = {}
+
+	local gRight = gtab:AddRightGroupbox("Preview")
 
 	local pvHolder = Instance.new("Frame")
 	pvHolder.BackgroundTransparency = 1
@@ -869,9 +863,9 @@ local function attach(win, opt)
 		end 
 	});
 
-	local function add_script_button(inst)
+	local function add_script_button(inst, groupbox)
 		local path = instance_path(inst)
-		gLeft:AddButton({ 
+		groupbox:AddButton({ 
 			Text = inst.Name .. " (" .. inst.ClassName .. ")"; 
 			Func = function()
 				currentInst = inst;
@@ -896,29 +890,41 @@ local function attach(win, opt)
 	end
 
 	local function rebuild_game_scripts()
-		if gLeft.Elements then
-			for _,el in ipairs(gLeft.Elements) do 
-				if el.Holder then 
-					el.Holder:Destroy() 
-				end 
+		for serviceName, groupbox in pairs(serviceGroupboxes) do
+			if groupbox.Elements then
+				for _,el in ipairs(groupbox.Elements) do 
+					if el.Holder then 
+						el.Holder:Destroy() 
+					end 
+				end
+				groupbox.Elements = {}
 			end
-			gLeft.Elements = {}
+		end
+		serviceGroupboxes = {}
+		
+		local scriptsByService = find_scripts_by_service()
+		local totalScripts = 0
+		
+		for serviceName, scripts in pairs(scriptsByService) do
+			totalScripts = totalScripts + #scripts
+			local groupbox = gtab:AddLeftGroupbox(serviceName .. " (" .. #scripts .. ")")
+			serviceGroupboxes[serviceName] = groupbox
+			
+			for _, inst in ipairs(scripts) do
+				add_script_button(inst, groupbox)
+			end
 		end
 		
-		local scripts = find_scripts();
-		lib:Notify("found " .. #scripts .. " scripts", 2);
+		lib:Notify("found " .. totalScripts .. " scripts across " .. table.getn(scriptsByService) .. " services", 2)
 		
-		for _, inst in ipairs(scripts) do
-			add_script_button(inst);
-		end
-		
-		if #scripts == 0 then
-			gLeft:AddLabel("no localscript/modulescript found");
+		if totalScripts == 0 then
+			local emptyGroupbox = gtab:AddLeftGroupbox("No Scripts Found")
+			emptyGroupbox:AddLabel("no scripts found in target services")
 		end
 	end
 
-	gLeft:AddButton({ Text = "Refresh Scripts"; Func = rebuild_game_scripts });
-	rebuild_game_scripts();
+	gtab:AddRightGroupbox("Actions"):AddButton({ Text = "Refresh Scripts"; Func = rebuild_game_scripts })
+	rebuild_game_scripts()
 
 	local function render_reply(text, model_name)
 		local prefixed = false
@@ -1189,5 +1195,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.5")
+print("ai_chat_ext v15.6")
 return { attach = attach }
