@@ -261,6 +261,26 @@ local function extract_anthropic_text(obj)
 	return table.concat(buf, "\n")
 end
 
+local function extract_anthropic_stream(raw)
+	local out = {}
+	for line in string.gmatch(raw or "", "[^\r\n]+") do
+		if string.sub(line,1,5) == "data:" then
+			local json = (string.sub(line,6) or ""):gsub("^%s+","")
+			if json ~= "" and json ~= "[DONE]" then
+				local ok, obj = pcall(hs.JSONDecode, hs, json)
+				if ok and type(obj) == "table" then
+					if obj.type == "content_block_delta" and obj.delta and obj.delta.type == "text_delta" and type(obj.delta.text) == "string" then
+						table.insert(out, obj.delta.text)
+					elseif obj.type == "error" and obj.error and obj.error.message then
+						return nil, (obj.error.message)
+					end
+				end
+			end
+		end
+	end
+	return table.concat(out, ""), nil
+end
+
 local function sanitize_label(s)
 	s = tostring(s or "srv")
 	s = s:gsub("^[^A-Za-z]+", "x")
@@ -522,7 +542,7 @@ local function attach(win, opt)
 	inp.TextColor3 = lib.Scheme.FontColor
 	inp.TextSize = 14
 	inp.PlaceholderText = "type..."
-	inp.Size = UDim2.new(1,-206,1,0)
+	inp.Size = UDim2.new(1,-306,1,0)
 	inp.Parent = row
 
 	local ip = Instance.new("UIPadding")
@@ -530,6 +550,7 @@ local function attach(win, opt)
 	ip.Parent = inp
 
 	local use_web = (typeof(getgenv().ai_enable_web) == "boolean") and getgenv().ai_enable_web or false
+	local use_stream = (typeof(getgenv().ai_stream) == "boolean") and getgenv().ai_stream or false
 
 	local web = Instance.new("TextButton")
 	web.BackgroundColor3 = lib.Scheme.MainColor
@@ -546,6 +567,22 @@ local function attach(win, opt)
 		use_web = not use_web
 		getgenv().ai_enable_web = use_web
 		web.Text = use_web and "web: on" or "web: off"
+	end)
+
+	local streambtn = Instance.new("TextButton")
+	streambtn.BackgroundColor3 = lib.Scheme.MainColor
+	streambtn.BorderColor3 = lib.Scheme.OutlineColor
+	streambtn.Text = use_stream and "stream: on" or "stream: off"
+	streambtn.FontFace = lib.Scheme.Font
+	streambtn.TextSize = 14
+	streambtn.TextColor3 = lib.Scheme.FontColor
+	streambtn.Size = UDim2.new(0,96,1,0)
+	streambtn.Position = UDim2.new(1,-304,0,0)
+	streambtn.Parent = row
+	streambtn.MouseButton1Click:Connect(function()
+		use_stream = not use_stream
+		getgenv().ai_stream = use_stream
+		streambtn.Text = use_stream and "stream: on" or "stream: off"
 	end)
 
 	local btn = Instance.new("TextButton")
@@ -1015,6 +1052,7 @@ local function attach(win, opt)
 				if typeof(getgenv().ai_web_user_location) == "table" then t[1].user_location = getgenv().ai_web_user_location end
 				body.tools = t
 			end
+			if use_stream then body.stream = true end
 			local success, result = pcall(function()
 				return request({
 					Url = "https://api.anthropic.com/v1/messages";
@@ -1028,16 +1066,25 @@ local function attach(win, opt)
 			elseif not result or not result.Body then
 				out = "empty response body"
 			else
-				local okj, data = pcall(hs.JSONDecode, hs, result.Body)
-				if okj and type(data) == "table" then
-					local txt = extract_anthropic_text(data)
-					if txt == "" then
-						out = "no answer text\nraw: "..string.sub(result.Body,1,1200)
+				if use_stream then
+					local txt, err = extract_anthropic_stream(result.Body)
+					if not txt or txt == "" then
+						out = err and ("api error: "..tostring(err)) or ("no answer text\nraw: "..string.sub(result.Body,1,1200))
 					else
 						out = txt
 					end
 				else
-					out = "json parse error"
+					local okj, data = pcall(hs.JSONDecode, hs, result.Body)
+					if okj and type(data) == "table" then
+						local txt = extract_anthropic_text(data)
+						if txt == "" then
+							out = "no answer text\nraw: "..string.sub(result.Body,1,1200)
+						else
+							out = txt
+						end
+					else
+						out = "json parse error"
+					end
 				end
 			end
 		elseif prov == "google" then
@@ -1101,5 +1148,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.4")
+print("ai_chat_ext v15.5")
 return { attach = attach }
