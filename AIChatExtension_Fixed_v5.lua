@@ -338,7 +338,8 @@ end
 local function attach(win, opt)
 	opt = opt or {}
 	local key = opt.key or ""
-	local model = opt.model or "gpt-5"
+	local model = opt.model or "gpt-4o"
+	local provider = opt.provider or "openai"
 	local sys = opt.system or "you are a helpful assistant"
 	local ide = opt.ide
 
@@ -359,11 +360,13 @@ local function attach(win, opt)
 
 	local include_game_scripts = {}
 
-	local function get_current_key()
+	local function get_openai_key()
 		local v = ""
 		local opts = lib.Options
 		if opts and opts.OpenAIKey and typeof(opts.OpenAIKey.Value) == "string" and opts.OpenAIKey.Value ~= "" then
 			v = opts.OpenAIKey.Value
+		elseif typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
+			v = getgenv().ai_openai_key
 		elseif typeof(getgenv().ai_key) == "string" and getgenv().ai_key ~= "" then
 			v = getgenv().ai_key
 		elseif typeof(key) == "string" then
@@ -373,6 +376,64 @@ local function attach(win, opt)
 			return (v:gsub("^%s+","")):gsub("%s+$","")
 		end
 		return ""
+	end
+
+	local function get_anthropic_key()
+		local opts = lib.Options
+		if opts and opts.AnthropicKey and typeof(opts.AnthropicKey.Value) == "string" and opts.AnthropicKey.Value ~= "" then
+			return opts.AnthropicKey.Value
+		end
+		if typeof(getgenv().ai_anthropic_key) == "string" and getgenv().ai_anthropic_key ~= "" then return getgenv().ai_anthropic_key end
+		return ""
+	end
+
+	local function get_gemini_key()
+		local opts = lib.Options
+		if opts and opts.GeminiKey and typeof(opts.GeminiKey.Value) == "string" and opts.GeminiKey.Value ~= "" then
+			return opts.GeminiKey.Value
+		end
+		if typeof(getgenv().ai_gemini_key) == "string" and getgenv().ai_gemini_key ~= "" then return getgenv().ai_gemini_key end
+		return ""
+	end
+
+	local function get_current_provider()
+		local p = provider
+		local opts = lib.Options
+		if opts and opts.AIProvider and opts.AIProvider.Value then
+			p = tostring(opts.AIProvider.Value)
+		end
+		if typeof(getgenv().ai_provider) == "string" and getgenv().ai_provider ~= "" then p = getgenv().ai_provider end
+		if p == "" then p = "openai" end
+		return p
+	end
+
+	local models_by_provider = {
+		openai = { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-3.5-turbo" },
+		anthropic = { "claude-3-5-sonnet-20240620", "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307" },
+		google = { "gemini-1.5-pro", "gemini-1.5-flash" }
+	}
+
+	local function default_model_for_provider(p)
+		if p == "anthropic" then return "claude-3-5-sonnet-20240620" end
+		if p == "google" then return "gemini-1.5-pro" end
+		return "gpt-4o"
+	end
+
+	local function get_current_model(p)
+		local m = model
+		local opts = lib.Options
+		if opts and opts.AIModel and opts.AIModel.Value and tostring(opts.AIModel.Value) ~= "" then
+			m = tostring(opts.AIModel.Value)
+		elseif m == "" or m == nil then
+			m = default_model_for_provider(p)
+		end
+		return m
+	end
+
+	local function get_provider_key(p)
+		if p == "anthropic" then return get_anthropic_key() end
+		if p == "google" then return get_gemini_key() end
+		return get_openai_key()
 	end
 
 	local function build_messages()
@@ -447,28 +508,53 @@ local function attach(win, opt)
 	inp.TextColor3 = lib.Scheme.FontColor
 	inp.TextSize = 14
 	inp.PlaceholderText = "type..."
-	inp.Size = UDim2.new(1,-206,1,0)
+	inp.Size = UDim2.new(1,-306,1,0)
 	inp.Parent = row
 
 	local ip = Instance.new("UIPadding")
 	ip.PaddingLeft = UDim.new(0,8)
 	ip.Parent = inp
 
+	local opts = lib.Options or {}
+	local use_web = false
+	if opts.AIEnableWeb and typeof(opts.AIEnableWeb.Value) == "boolean" then use_web = opts.AIEnableWeb.Value end
+
 	local web = Instance.new("TextButton")
 	web.BackgroundColor3 = lib.Scheme.MainColor
 	web.BorderColor3 = lib.Scheme.OutlineColor
-	web.Text = "web: off"
+	web.Text = use_web and "web: on" or "web: off"
 	web.FontFace = lib.Scheme.Font
 	web.TextSize = 14
 	web.TextColor3 = lib.Scheme.FontColor
 	web.Size = UDim2.new(0,96,1,0)
-	web.Position = UDim2.new(1,-200,0,0)
+	web.Position = UDim2.new(1,-300,0,0)
 	web.Parent = row
 
-	local use_web = false
 	web.MouseButton1Click:Connect(function()
+		local p = get_current_provider()
+		if p ~= "openai" then
+			use_web = false
+			web.Text = "web: off"
+			lib:Notify("web supported for openai only",2)
+			return
+		end
 		use_web = not use_web
 		web.Text = use_web and "web: on" or "web: off"
+	end)
+
+	local provbtn = Instance.new("TextButton")
+	provbtn.BackgroundColor3 = lib.Scheme.MainColor
+	provbtn.BorderColor3 = lib.Scheme.OutlineColor
+	provbtn.Text = "prov"
+	provbtn.FontFace = lib.Scheme.Font
+	provbtn.TextSize = 14
+	provbtn.TextColor3 = lib.Scheme.FontColor
+	provbtn.Size = UDim2.new(0,48,1,0)
+	provbtn.Position = UDim2.new(1,-200,0,0)
+	provbtn.Parent = row
+	provbtn.MouseButton1Click:Connect(function()
+		local p = get_current_provider()
+		lib:Notify("provider: "..p,2)
 	end)
 
 	local btn = Instance.new("TextButton")
@@ -570,6 +656,28 @@ local function attach(win, opt)
 	end)
 
 	refresh_rules()
+
+	local settab = win:AddKeyTab("AI Settings")
+	local pbox = settab:AddLeftGroupbox("Provider")
+	local kbox = settab:AddRightGroupbox("Keys")
+	local fbox = settab:AddRightGroupbox("Features")
+
+	local prov_dd = pbox:AddDropdown("AIProvider", { Values = {"openai","anthropic","google"}; Default = 1; Text = "Provider"; Callback = function(v) end })
+	local model_dd = pbox:AddDropdown("AIModel", { Values = models_by_provider.openai; Default = 1; Text = "Model"; Callback = function(v) end })
+
+	prov_dd:OnChanged(function(v)
+		local p = tostring(v)
+		local lst = models_by_provider[p] or models_by_provider.openai
+		model_dd:SetValues(lst)
+		model_dd:SetValue(lst[1])
+	end)
+
+	kbox:AddInput("OpenAIKey", { Text = "OpenAI Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
+	kbox:AddInput("AnthropicKey", { Text = "Anthropic Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
+	kbox:AddInput("GeminiKey", { Text = "Gemini Key"; Default = ""; Finished = true; ClearTextOnFocus = false })
+
+	fbox:AddToggle("AIEnableWeb", { Text = "Enable Web Search (OpenAI)"; Default = use_web; Callback = function(v) use_web = v; web.Text = use_web and "web: on" or "web: off" end })
+	fbox:AddToggle("AIEnableMCP", { Text = "Enable MCP Tools"; Default = false; Callback = function(v) getgenv().mcp_use_in_chat = v end })
 
 	local svctab = win:AddTab("Services", "server")
 	local svcBoxLeft = svctab:AddLeftGroupbox("Services")
@@ -826,35 +934,117 @@ local function attach(win, opt)
 		busy = true
 		
 		local out = "request failed"
-		local k = get_current_key()
+		local prov = get_current_provider()
+		local model_name = get_current_model(prov)
+		local k = get_provider_key(prov)
 
-		local want_mcp = (getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true)
+		local want_mcp = false
+		if opts.AIEnableMCP and typeof(opts.AIEnableMCP.Value) == "boolean" then want_mcp = opts.AIEnableMCP.Value end
+		if getgenv().mcp_enabled == true and getgenv().mcp_use_in_chat == true then want_mcp = true end
 
-		local model_name = model
-
-		if use_web or want_mcp then
-			local tools = {}
-			if use_web then table.insert(tools, { type = "web_search_preview" }) end
-			local function mcp_tools()
-				if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
-					for idx, e in ipairs(getgenv().mcp_servers) do
-						if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
-							local label = (tostring(e.label or ("srv"..tostring(idx))))
-							local url = normalize_mcp_url(e.url)
-							local hdr = normalize_headers(e.headers)
-							table.insert(tools, { type = "mcp", server_label = label, server_url = url, require_approval = e.require_approval or e.req or "never", headers = hdr })
+		if prov == "openai" then
+			if use_web or want_mcp then
+				local tools = {}
+				if use_web then table.insert(tools, { type = "web_search_preview" }) end
+				local function mcp_tools()
+					if getgenv().mcp_enabled and getgenv().mcp_use_in_chat and type(getgenv().mcp_servers) == "table" then
+						for idx, e in ipairs(getgenv().mcp_servers) do
+							if e and (e.enabled ~= false) and type(e.url) == "string" and e.url ~= "" then
+								local label = (tostring(e.label or ("srv"..tostring(idx))))
+								local url = normalize_mcp_url(e.url)
+								local hdr = normalize_headers(e.headers)
+								table.insert(tools, { type = "mcp", server_label = label, server_url = url, require_approval = e.require_approval or e.req or "never", headers = hdr })
+							end
 						end
 					end
 				end
+				mcp_tools()
+				local prompt = flatten_messages_to_prompt(base)
+				local body = { model = model_name, tools = tools, input = prompt }
+				local success, result = pcall(function()
+					return request({
+						Url = "https://api.openai.com/v1/responses";
+						Method = "POST";
+						Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..k; };
+						Body = hs:JSONEncode(body);
+					})
+				end)
+				if not success then
+					out = "request error: "..tostring(result)
+				elseif not result or not result.Body then
+					out = "empty response body"
+				else
+					local okj, data = pcall(hs.JSONDecode, hs, result.Body)
+					if okj then
+						local txt = extract_answer(data)
+						if not txt or txt == "" then
+							if data.error and data.error.message then
+								out = "api error: "..tostring(data.error.message)
+							else
+								out = "no answer text\nraw: "..string.sub(result.Body,1,1200)
+							end
+						else
+							out = txt
+						end
+					else
+						out = "json parse error"
+					end
+				end
+			else
+				local success, result = pcall(function()
+					return request({ 
+						Url = "https://api.openai.com/v1/chat/completions"; 
+						Method = "POST"; 
+						Headers = { 
+							["Content-Type"] = "application/json"; 
+							["Authorization"] = "Bearer "..k; 
+						}; 
+						Body = hs:JSONEncode({ 
+							model = model_name; 
+							messages = base; 
+						}); 
+					})
+				end)
+				if not success then
+					out = "request error: " .. tostring(result)
+				elseif not result then
+					out = "no response received"
+				elseif not result.Body then
+					out = "empty response body"
+				else
+					local parseOk, data = pcall(hs.JSONDecode, hs, result.Body)
+					if not parseOk then
+						out = "json parse error: " .. tostring(data) .. "\nraw response: " .. result.Body
+					elseif data.error then
+						out = "api error: " .. (data.error.message or tostring(data.error))
+					elseif not data.choices or #data.choices == 0 then
+						out = "no choices in response\nraw: " .. result.Body
+					elseif not data.choices[1].message then
+						out = "no message in choice\nraw: " .. result.Body  
+					elseif not data.choices[1].message.content then
+						out = "no content in message\nraw: " .. result.Body
+					else
+						out = data.choices[1].message.content
+					end
+				end
 			end
-			mcp_tools()
-			local prompt = flatten_messages_to_prompt(base)
-			local body = { model = model, tools = tools, input = prompt }
+		elseif prov == "anthropic" then
+			local sysParts = {}
+			local amsg = {}
+			for _,m in ipairs(base) do
+				if m.role == "system" then
+					table.insert(sysParts, m.content or "")
+				else
+					local r = m.role == "assistant" and "assistant" or "user"
+					table.insert(amsg, { role = r, content = tostring(m.content or "") })
+				end
+			end
+			local body = { model = model_name, system = table.concat(sysParts, "\n\n"), messages = amsg, max_tokens = 1024 }
 			local success, result = pcall(function()
 				return request({
-					Url = "https://api.openai.com/v1/responses";
+					Url = "https://api.anthropic.com/v1/messages";
 					Method = "POST";
-					Headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer "..k; };
+					Headers = { ["Content-Type"] = "application/json"; ["x-api-key"] = k; ["anthropic-version"] = "2023-06-01"; };
 					Body = hs:JSONEncode(body);
 				})
 			end)
@@ -864,63 +1054,53 @@ local function attach(win, opt)
 				out = "empty response body"
 			else
 				local okj, data = pcall(hs.JSONDecode, hs, result.Body)
-				if okj then
-					local txt = extract_answer(data)
-					if not txt or txt == "" then
-						if data.error and data.error.message then
-							out = "api error: "..tostring(data.error.message)
-						else
-							out = "no answer text\nraw: "..string.sub(result.Body,1,1200)
-						end
-					else
-						out = txt
+				if okj and type(data) == "table" then
+					local buf = {}
+					if type(data.content) == "table" then
+						for _,c in ipairs(data.content) do if c and c.type == "text" and type(c.text) == "string" then table.insert(buf, c.text) end end
 					end
+					out = (#buf>0 and table.concat(buf, "\n")) or "no answer text"
+				else
+					out = "json parse error"
+				end
+			end
+		elseif prov == "google" then
+			local prompt = flatten_messages_to_prompt(base)
+			local body = { contents = { { role = "user", parts = { { text = prompt } } } } }
+			local url = "https://generativelanguage.googleapis.com/v1beta/models/"..model_name..":generateContent?key="..hs:UrlEncode(k)
+			local success, result = pcall(function()
+				return request({
+					Url = url;
+					Method = "POST";
+					Headers = { ["Content-Type"] = "application/json" };
+					Body = hs:JSONEncode(body);
+				})
+			end)
+			if not success then
+				out = "request error: "..tostring(result)
+			elseif not result or not result.Body then
+				out = "empty response body"
+			else
+				local okj, data = pcall(hs.JSONDecode, hs, result.Body)
+				if okj and type(data) == "table" then
+					local txt = ""
+					local cand = data.candidates and data.candidates[1]
+					if cand and cand.content and cand.content.parts then
+						local buf = {}
+						for _,p in ipairs(cand.content.parts) do if p and type(p.text)=="string" then table.insert(buf, p.text) end end
+						txt = table.concat(buf, "\n")
+					end
+					out = (txt ~= "" and txt) or "no answer text"
 				else
 					out = "json parse error"
 				end
 			end
 		else
-			local success, result = pcall(function()
-				return request({ 
-					Url = "https://api.openai.com/v1/chat/completions"; 
-					Method = "POST"; 
-					Headers = { 
-						["Content-Type"] = "application/json"; 
-						["Authorization"] = "Bearer "..k; 
-					}; 
-					Body = hs:JSONEncode({ 
-						model = model; 
-						messages = base; 
-					}); 
-				})
-			end)
-			
-			if not success then
-				out = "request error: " .. tostring(result)
-			elseif not result then
-				out = "no response received"
-			elseif not result.Body then
-				out = "empty response body"
-			else
-				local parseOk, data = pcall(hs.JSONDecode, hs, result.Body)
-				if not parseOk then
-					out = "json parse error: " .. tostring(data) .. "\nraw response: " .. result.Body
-				elseif data.error then
-					out = "api error: " .. (data.error.message or tostring(data.error))
-				elseif not data.choices or #data.choices == 0 then
-					out = "no choices in response\nraw: " .. result.Body
-				elseif not data.choices[1].message then
-					out = "no message in choice\nraw: " .. result.Body  
-				elseif not data.choices[1].message.content then
-					out = "no content in message\nraw: " .. result.Body
-				else
-					out = data.choices[1].message.content
-				end
-			end
+			out = "unknown provider"
 		end
 		
 		waitlbl:Destroy()
-		render_reply(out, model_name)
+		render_reply(out, prov..":"..model_name)
 		busy = false
 
 		local mem = getgenv().obs_mem
@@ -945,5 +1125,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v14")
+print("ai_chat_ext v15")
 return { attach = attach }
