@@ -55,23 +55,15 @@ local function enforce(opt)
 		return true, hwid
 	end
 	
-	-- Not whitelisted - try to copy to clipboard
-	local copied = false
+	-- Not whitelisted - copy to clipboard
 	if setclipboard then
-		local ok = pcall(function()
+		pcall(function()
 			setclipboard(hwid)
-			copied = true
 		end)
-		if not ok then copied = false end
 	end
 	
 	local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
-	
-	if copied then
-		nl:SendNotification('Warning', 'HWID: '..hwid..' copied to clipboard. Please dm '..dm..' to be whitelisted', 8)
-	else
-		nl:SendNotification('Warning', 'HWID: '..hwid..' - Please dm '..dm..' with this HWID to be whitelisted', 10)
-	end
+	nl:SendNotification('Warning', 'Not whitelisted! HWID Copied, ask xenon to whitelist you.', 5)
 	
 	return false, hwid
 end
