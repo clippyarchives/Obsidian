@@ -68,9 +68,9 @@ local function enforce(opt)
 	local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
 	
 	if copied then
-		nl:SendNotification('Access Denied', 'HWID: '..hwid..' copied to clipboard. Please dm '..dm..' to be whitelisted', 8)
+		nl:SendNotification('Warning', 'HWID: '..hwid..' copied to clipboard. Please dm '..dm..' to be whitelisted', 8)
 	else
-		nl:SendNotification('Access Denied', 'HWID: '..hwid..' - Please dm '..dm..' with this HWID to be whitelisted', 10)
+		nl:SendNotification('Warning', 'HWID: '..hwid..' - Please dm '..dm..' with this HWID to be whitelisted', 10)
 	end
 	
 	return false, hwid
