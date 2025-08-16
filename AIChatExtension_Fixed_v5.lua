@@ -379,8 +379,11 @@ local function attach(win, opt)
 	local include_game_scripts = {}
 
 	local function get_openai_key()
-		local v = ""
 		local opts = lib.Options
+		if getgenv().ai_use_default == true and typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
+			return getgenv().ai_openai_key
+		end
+		local v = ""
 		if opts and opts.OpenAIKey and typeof(opts.OpenAIKey.Value) == "string" and opts.OpenAIKey.Value ~= "" then
 			v = opts.OpenAIKey.Value
 		elseif typeof(getgenv().ai_openai_key) == "string" and getgenv().ai_openai_key ~= "" then
@@ -397,6 +400,9 @@ local function attach(win, opt)
 	end
 
 	local function get_anthropic_key()
+		if getgenv().ai_use_default == true and typeof(getgenv().ai_anthropic_key) == "string" and getgenv().ai_anthropic_key ~= "" then
+			return getgenv().ai_anthropic_key
+		end
 		local opts = lib.Options
 		if opts and opts.AnthropicKey and typeof(opts.AnthropicKey.Value) == "string" and opts.AnthropicKey.Value ~= "" then
 			return opts.AnthropicKey.Value
@@ -406,6 +412,9 @@ local function attach(win, opt)
 	end
 
 	local function get_gemini_key()
+		if getgenv().ai_use_default == true and typeof(getgenv().ai_gemini_key) == "string" and getgenv().ai_gemini_key ~= "" then
+			return getgenv().ai_gemini_key
+		end
 		local opts = lib.Options
 		if opts and opts.GeminiKey and typeof(opts.GeminiKey.Value) == "string" and opts.GeminiKey.Value ~= "" then
 			return opts.GeminiKey.Value
