@@ -657,7 +657,7 @@ local function attach(win, opt)
 
 	refresh_rules()
 
-	local settab = win:AddKeyTab("AI Settings")
+	local settab = win:AddTab("AI Settings", "settings")
 	local pbox = settab:AddLeftGroupbox("Provider")
 	local kbox = settab:AddRightGroupbox("Keys")
 	local fbox = settab:AddRightGroupbox("Features")
@@ -1125,5 +1125,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15")
+print("ai_chat_ext v15.1")
 return { attach = attach }
