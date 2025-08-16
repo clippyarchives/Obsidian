@@ -1,23 +1,13 @@
 local hs = game:GetService("HttpService")
 
-local function http()
-	return (syn and syn.request) or request or http_request
-end
-
 local function get()
-	local req = http()
-	if not req then return "" end
-	
-	local ok, res = pcall(function()
-		return req({ Url = "https://httpbin.org/get"; Method = "GET"; })
-	end)
-	
-	if not ok or not res or not res.Body then return "" end
-	
-	local ok2, decoded = pcall(hs.JSONDecode, hs, res.Body)
-	if not ok2 or type(decoded) ~= "table" or type(decoded.headers) ~= "table" then return "" end
-	
-	return decoded.headers["Syn-Fingerprint"] or ""
+	if gethwid then
+		local ok, hwid = pcall(gethwid)
+		if ok and hwid and hwid ~= "" then
+			return tostring(hwid)
+		end
+	end
+	return ""
 end
 
 local function parse_whitelist(s)
@@ -42,12 +32,7 @@ end
 local function fetch(url)
 	local ok, body = pcall(game.HttpGet, game, url)
 	if ok and type(body) == "string" and #body > 0 then return body end
-	local r = http()
-	if not r then return "" end
-	local ok2, res = pcall(function()
-		return r({ Url = url; Method = "GET"; })
-	end)
-	return (ok2 and res and res.Body) and res.Body or ""
+	return ""
 end
 
 local function enforce(opt)
