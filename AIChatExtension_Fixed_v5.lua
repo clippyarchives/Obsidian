@@ -20,31 +20,6 @@ end
 
 local ACCENT_HEX = color_to_hex(lib.Scheme.AccentColor or Color3.fromRGB(157,125,255))
 
-local function escape_rich_text(s)
-	s = tostring(s or "")
-	s = s:gsub("&", "&amp;")
-	s = s:gsub("<", "&lt;")
-	s = s:gsub(">", "&gt;")
-	return s
-end
-
-local function chunk_text(s, lim)
-	lim = lim or 20000
-	if #s <= lim then return { s } end
-	local out = {}
-	local acc = ""
-	for line in (s.."\n"):gmatch("([^\n]*)\n") do
-		if #acc + #line + 1 > lim and acc ~= "" then
-			table.insert(out, acc)
-			acc = line
-		else
-			if acc == "" then acc = line else acc = acc .. "\n" .. line end
-		end
-	end
-	if acc ~= "" then table.insert(out, acc) end
-	return out
-end
-
 local function get_style()
 	local s = getgenv().obs_chat_style or {}
 	s.ai_color = s.ai_color or Color3.fromRGB(180,220,255)
@@ -56,27 +31,20 @@ local function get_style()
 end
 
 local function add_lbl(parent, txt, color)
-	local baseCol = color or lib.Scheme.FontColor
-	local safe = escape_rich_text(txt)
-	local chunks = chunk_text(safe, 20000)
-	local first
-	for i=1,#chunks do
-		local l = Instance.new("TextLabel")
-		l.BackgroundColor3 = lib.Scheme.BackgroundColor
-		l.TextXAlignment = Enum.TextXAlignment.Left
-		l.TextYAlignment = Enum.TextYAlignment.Top
-		l.TextWrapped = true
-		l.FontFace = lib.Scheme.Font
-		l.TextSize = 14
-		l.TextColor3 = baseCol
-		l.AutomaticSize = Enum.AutomaticSize.Y
-		l.Size = UDim2.new(1,-12,0,0)
-		l.Text = chunks[i]
-		l.RichText = true
-		l.Parent = parent
-		if not first then first = l end
-	end
-	return first
+	local l = Instance.new("TextLabel")
+	l.BackgroundColor3 = lib.Scheme.BackgroundColor
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Top
+	l.TextWrapped = true
+	l.FontFace = lib.Scheme.Font
+	l.TextSize = 14
+	l.TextColor3 = color or lib.Scheme.FontColor
+	l.AutomaticSize = Enum.AutomaticSize.Y
+	l.Size = UDim2.new(1,-12,0,0)
+	l.Text = txt
+	l.RichText = true
+	l.Parent = parent
+	return l
 end
 
 local function add_line_with_prefix(parent, prefix_kind, body, model)
@@ -93,7 +61,7 @@ local function add_line_with_prefix(parent, prefix_kind, body, model)
 		pfx = "["..dn.."] > "
 		pfxCol = s.user_color or baseCol
 	end
-	local txt = string.format("<font color=\"%s\">%s</font>%s", color_to_hex(pfxCol), pfx, escape_rich_text(body))
+	local txt = string.format("<font color=\"%s\">%s</font>%s", color_to_hex(pfxCol), pfx, tostring(body or ""))
 	return add_lbl(parent, txt, baseCol)
 end
 
@@ -957,6 +925,7 @@ local function attach(win, opt)
 							end
 						end
 					end
+				end
 				mcp_tools()
 				local prompt = flatten_messages_to_prompt(base)
 				local body = { model = model_name, tools = tools, input = prompt }
@@ -1132,5 +1101,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.5")
+print("ai_chat_ext v15.4")
 return { attach = attach }
