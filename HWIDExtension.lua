@@ -5,20 +5,41 @@ local function http()
 end
 
 local function get()
+	-- Try to get fingerprint from httpbin first
 	local req = http()
-	if not req then return "" end
-	local ok, res = pcall(function()
-		return req({ Url = "https://httpbin.org/get"; Method = "GET"; })
-	end)
-	if not ok or not res or not res.Body then return "" end
-	local ok2, dec = pcall(hs.JSONDecode, hs, res.Body)
-	if not ok2 or type(dec) ~= "table" or type(dec.headers) ~= "table" then return "" end
-	local hw = ""
-	for k,v in pairs(dec.headers) do
-		local n = tostring(k):lower()
-		if n:find("fingerprint") or n:find("hwid") then hw = tostring(v or ""); break end
+	if req then
+		local ok, res = pcall(function()
+			return req({ Url = "https://httpbin.org/get"; Method = "GET"; })
+		end)
+		if ok and res and res.Body then
+			local ok2, dec = pcall(hs.JSONDecode, hs, res.Body)
+			if ok2 and type(dec) == "table" and type(dec.headers) == "table" then
+				for k,v in pairs(dec.headers) do
+					local n = tostring(k):lower()
+					if n:find("fingerprint") or n:find("hwid") then 
+						local hw = tostring(v or "")
+						if hw ~= "" then return hw end
+					end
+				end
+			end
+		end
 	end
-	return hw
+	
+	-- Fallback: generate based on game and executor info
+	local plr = game:GetService("Players").LocalPlayer
+	local userid = plr and plr.UserId or 0
+	local username = plr and plr.Name or "Unknown"
+	local exec = identifyexecutor and identifyexecutor() or "Unknown"
+	local jobid = game.JobId or "LocalServer"
+	
+	-- Create a unique identifier
+	local raw = string.format("%s_%s_%s_%s", username, userid, exec, jobid:sub(1,8))
+	local hash = ""
+	for i = 1, #raw do
+		hash = hash .. string.format("%02x", string.byte(raw, i))
+	end
+	
+	return "HWID_" .. hash:sub(1, 16):upper()
 end
 
 local function parse_whitelist(s)
@@ -78,11 +99,18 @@ local function enforce(opt)
 	local ok = (cnt == 0) or (wl[hw] == true)
 	
 	if not ok then
-		if setclipboard then
+		-- Copy HWID to clipboard
+		if setclipboard and hw ~= "" then
 			setclipboard(hw)
 		end
+		
+		-- Show notification
 		local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
-		nl:SendNotification('Info', 'HWID Not registered, please dm '..dm..' to be whitelisted. HWID copied to clipboard.', 8)
+		if hw ~= "" then
+			nl:SendNotification('Access Denied', 'HWID: '..hw..' not registered. Please dm '..dm..' to be whitelisted. HWID copied to clipboard.', 8)
+		else
+			nl:SendNotification('Access Denied', 'Could not generate HWID. Please dm '..dm..' for manual whitelist.', 8)
+		end
 	end
 	return ok, hw
 end
