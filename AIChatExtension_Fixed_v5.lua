@@ -251,9 +251,9 @@ local function extract_anthropic_text(obj)
 				if c.type == "text" and type(c.text) == "string" and #c.text > 0 then
 					table.insert(buf, c.text)
 				elseif c.type == "tool_use" then
-					-- ignore
+					
 				elseif c.type == "web_search_tool_result" then
-					-- ignore
+					
 				end
 			end
 		end
@@ -434,11 +434,20 @@ local function attach(win, opt)
 	local function get_current_model(p)
 		local m = model
 		local opts = lib.Options
-		if p == "openai" and opts and opts.OpenAIModel and opts.OpenAIModel.Value and tostring(opts.OpenAIModel.Value) ~= "" then
-			m = tostring(opts.OpenAIModel.Value)
-		elseif opts and opts.AIModel and opts.AIModel.Value and tostring(opts.AIModel.Value) ~= "" then
-			m = tostring(opts.AIModel.Value)
-		elseif m == "" or m == nil then
+		if p == "openai" then
+			if opts and opts.OpenAIModel and tostring(opts.OpenAIModel.Value or "") ~= "" then
+				m = tostring(opts.OpenAIModel.Value)
+			elseif typeof(getgenv().ai_model) == "string" and getgenv().ai_model ~= "" then
+				m = getgenv().ai_model
+			end
+		else
+			if opts and opts.AIModel and tostring(opts.AIModel.Value or "") ~= "" then
+				m = tostring(opts.AIModel.Value)
+			elseif typeof(getgenv().ai_model) == "string" and getgenv().ai_model ~= "" then
+				m = getgenv().ai_model
+			end
+		end
+		if m == "" or m == nil then
 			m = default_model_for_provider(p)
 		end
 		return m
@@ -925,7 +934,6 @@ local function attach(win, opt)
 							end
 						end
 					end
-				end
 				mcp_tools()
 				local prompt = flatten_messages_to_prompt(base)
 				local body = { model = model_name, tools = tools, input = prompt }
