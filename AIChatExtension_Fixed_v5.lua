@@ -725,10 +725,27 @@ local function attach(win, opt)
 
 	local function add_script(code)
 		table.insert(scripts_store, code)
+		
+		local holder = Instance.new("Frame")
+		holder.BackgroundColor3 = lib.Scheme.MainColor
+		holder.BorderColor3 = lib.Scheme.OutlineColor
+		holder.BorderSizePixel = 1
+		holder.Size = UDim2.new(1,-12,0,100)
+		holder.AutomaticSize = Enum.AutomaticSize.Y
+		holder.Parent = sbox
+		
+		local inner = Instance.new("ScrollingFrame")
+		inner.BackgroundTransparency = 1
+		inner.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		inner.CanvasSize = UDim2.fromOffset(0,0)
+		inner.ScrollBarThickness = 2
+		inner.Size = UDim2.new(1,-4,1,-4)
+		inner.Position = UDim2.fromOffset(2,2)
+		inner.Parent = holder
+		
 		local codebtn = Instance.new("TextButton")
 		codebtn.AutoButtonColor = true
-		codebtn.BackgroundColor3 = lib.Scheme.MainColor
-		codebtn.BorderColor3 = lib.Scheme.OutlineColor
+		codebtn.BackgroundTransparency = 1
 		codebtn.TextXAlignment = Enum.TextXAlignment.Left
 		codebtn.TextYAlignment = Enum.TextYAlignment.Top
 		codebtn.TextWrapped = true
@@ -737,18 +754,46 @@ local function attach(win, opt)
 		codebtn.TextColor3 = lib.Scheme.FontColor
 		codebtn.AutomaticSize = Enum.AutomaticSize.Y
 		codebtn.Size = UDim2.new(1,-12,0,0)
-		codebtn.Parent = sbox
-		local pad = Instance.new("UIPadding")
-		pad.PaddingLeft = UDim.new(0,8)
-		pad.PaddingRight = UDim.new(0,8)
-		pad.PaddingTop = UDim.new(0,6)
-		pad.PaddingBottom = UDim.new(0,6)
-		pad.Parent = codebtn
-		local norm = code
-		codebtn.Text = norm
-		codebtn.RichText = false
+		codebtn.Position = UDim2.fromOffset(6,6)
+		codebtn.Parent = inner
+		
+		local t = code:gsub("\r","")
+		local first = t:match("^%s*([%w%-_]*)\n")
+		if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
+			t = t:gsub("^%s*[%w%-_]*\n", "", 1)
+		end
+		
+		if synx and synx.syn and synx.syn.hl then
+			local ok, res = pcall(function()
+				return synx.syn.hl(t)
+			end)
+			if ok and type(res) == "string" then
+				codebtn.Text = res
+				codebtn.RichText = true
+			else
+				codebtn.Text = t
+				codebtn.RichText = false
+			end
+		else
+			codebtn.Text = t
+			codebtn.RichText = false
+		end
+		
 		codebtn.MouseButton1Click:Connect(function()
-			insert_code(norm)
+			insert_code(t)
+		end)
+		
+		inner.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseWheel then
+				for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
+					side.ScrollingEnabled = false
+				end
+				task.delay(0.05, function()
+					for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
+						side.ScrollingEnabled = true
+					end
+				end)
+			end
 		end)
 	end
 
@@ -878,28 +923,47 @@ local function attach(win, opt)
 	local function render_reply(text, model_name)
 		local prefixed = false
 		local i = 1
+		local codeCount = 0
+		
 		while true do
 			local a,b,seg = text:find("```(.-)```", i)
 			if not a then
 				local tail = text:sub(i)
 				if tail ~= "" then
-					if not prefixed then add_line_with_prefix(box, "ai", tail, model_name); prefixed = true else add_lbl(box, tail) end
+					if not prefixed then 
+						add_line_with_prefix(box, "ai", tail, model_name) 
+						prefixed = true 
+					else 
+						add_lbl(box, tail) 
+					end
 				elseif not prefixed then
 					add_line_with_prefix(box, "ai", "", model_name)
 					prefixed = true
 				end
 				break
 			end
+			
 			local pre = text:sub(i, a-1)
 			if pre ~= "" then
-				if not prefixed then add_line_with_prefix(box, "ai", pre, model_name); prefixed = true else add_lbl(box, pre) end
+				if not prefixed then 
+					add_line_with_prefix(box, "ai", pre, model_name) 
+					prefixed = true 
+				else 
+					add_lbl(box, pre) 
+				end
 			elseif not prefixed then
 				add_line_with_prefix(box, "ai", "", model_name)
 				prefixed = true
 			end
+			
 			local norm = seg:gsub("^%s*[%w%-_]*\n", "", 1)
 			add_script(norm)
+			codeCount = codeCount + 1
 			i = b + 1
+		end
+		
+		if codeCount > 0 then
+			add_lbl(box, string.format("sent %d script(s) to ai scripts tab", codeCount))
 		end
 	end
 
@@ -1125,5 +1189,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.4")
+print("ai_chat_ext v15.5")
 return { attach = attach }
