@@ -251,9 +251,9 @@ local function extract_anthropic_text(obj)
 				if c.type == "text" and type(c.text) == "string" and #c.text > 0 then
 					table.insert(buf, c.text)
 				elseif c.type == "tool_use" then
-					
+					-- ignore
 				elseif c.type == "web_search_tool_result" then
-					
+					-- ignore
 				end
 			end
 		end
@@ -434,28 +434,14 @@ local function attach(win, opt)
 	local function get_current_model(p)
 		local m = model
 		local opts = lib.Options
-		if p == "openai" then
-			if opts and opts.OpenAIModel and tostring(opts.OpenAIModel.Value or "") ~= "" then
-				m = tostring(opts.OpenAIModel.Value)
-			elseif typeof(getgenv().ai_model) == "string" and getgenv().ai_model ~= "" then
-				m = getgenv().ai_model
-			end
-		else
-			if opts and opts.AIModel and tostring(opts.AIModel.Value or "") ~= "" then
-				m = tostring(opts.AIModel.Value)
-			elseif typeof(getgenv().ai_model) == "string" and getgenv().ai_model ~= "" then
-				m = getgenv().ai_model
-			end
-		end
-		if m == "" or m == nil then
+		if p == "openai" and opts and opts.OpenAIModel and opts.OpenAIModel.Value and tostring(opts.OpenAIModel.Value) ~= "" then
+			m = tostring(opts.OpenAIModel.Value)
+		elseif opts and opts.AIModel and opts.AIModel.Value and tostring(opts.AIModel.Value) ~= "" then
+			m = tostring(opts.AIModel.Value)
+		elseif m == "" or m == nil then
 			m = default_model_for_provider(p)
 		end
 		return m
-	end
-
-	local function requires_responses_api(m)
-		m = tostring(m or "")
-		return (m:match("^gpt%-4%.1")) or (m:match("^gpt%-5"))
 	end
 
 	local function get_provider_key(p)
@@ -925,7 +911,7 @@ local function attach(win, opt)
 		if typeof(getgenv().mcp_use_in_chat) == "boolean" and getgenv().mcp_enabled == true then want_mcp = getgenv().mcp_use_in_chat end
 
 		if prov == "openai" then
-			if use_web or want_mcp or requires_responses_api(model_name) then
+			if use_web or want_mcp then
 				local tools = {}
 				if use_web then table.insert(tools, { type = "web_search_preview" }) end
 				local function mcp_tools()
