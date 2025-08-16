@@ -70,13 +70,23 @@ local function enforce(opt)
 		return true, hwid
 	end
 	
-	-- Not whitelisted - copy to clipboard and show notification
+	-- Not whitelisted - try to copy to clipboard
+	local copied = false
 	if setclipboard then
-		setclipboard(hwid)
+		local ok = pcall(function()
+			setclipboard(hwid)
+			copied = true
+		end)
+		if not ok then copied = false end
 	end
 	
 	local nl = loadstring(game:HttpGet('https://raw.githubusercontent.com/IceMinisterq/Notification-Library/Main/Library.lua'))()
-	nl:SendNotification('Access Denied', 'HWID Copied, please dm '..dm..' to be whitelisted', 6)
+	
+	if copied then
+		nl:SendNotification('Access Denied', 'HWID: '..hwid..' copied to clipboard. Please dm '..dm..' to be whitelisted', 8)
+	else
+		nl:SendNotification('Access Denied', 'HWID: '..hwid..' - Please dm '..dm..' with this HWID to be whitelisted', 10)
+	end
 	
 	return false, hwid
 end
