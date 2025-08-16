@@ -939,6 +939,7 @@ local function attach(win, opt)
 							end
 						end
 					end
+				end
 				mcp_tools()
 				local prompt = flatten_messages_to_prompt(base)
 				local body = { model = model_name, tools = tools, input = prompt }
