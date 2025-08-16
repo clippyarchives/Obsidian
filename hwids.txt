@@ -1,0 +1,5 @@
+return {
+    -- Add HWIDs here, one per line like:
+    -- "example_hwid_123",
+    -- "another_hwid_456",
+}
