@@ -453,6 +453,11 @@ local function attach(win, opt)
 		return m
 	end
 
+	local function requires_responses_api(m)
+		m = tostring(m or "")
+		return (m:match("^gpt%-4%.1")) or (m:match("^gpt%-5"))
+	end
+
 	local function get_provider_key(p)
 		if p == "anthropic" then return get_anthropic_key() end
 		if p == "google" then return get_gemini_key() end
@@ -920,7 +925,7 @@ local function attach(win, opt)
 		if typeof(getgenv().mcp_use_in_chat) == "boolean" and getgenv().mcp_enabled == true then want_mcp = getgenv().mcp_use_in_chat end
 
 		if prov == "openai" then
-			if use_web or want_mcp then
+			if use_web or want_mcp or requires_responses_api(model_name) then
 				local tools = {}
 				if use_web then table.insert(tools, { type = "web_search_preview" }) end
 				local function mcp_tools()
