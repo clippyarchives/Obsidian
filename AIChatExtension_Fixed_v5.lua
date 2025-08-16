@@ -243,6 +243,24 @@ local function extract_answer(data)
 	return nil
 end
 
+local function extract_anthropic_text(obj)
+	local buf = {}
+	if type(obj) == "table" and type(obj.content) == "table" then
+		for _,c in ipairs(obj.content) do
+			if type(c) == "table" then
+				if c.type == "text" and type(c.text) == "string" and #c.text > 0 then
+					table.insert(buf, c.text)
+				elseif c.type == "tool_use" then
+					-- ignore
+				elseif c.type == "web_search_tool_result" then
+					-- ignore
+				end
+			end
+		end
+	end
+	return table.concat(buf, "\n")
+end
+
 local function sanitize_label(s)
 	s = tostring(s or "srv")
 	s = s:gsub("^[^A-Za-z]+", "x")
@@ -504,17 +522,14 @@ local function attach(win, opt)
 	inp.TextColor3 = lib.Scheme.FontColor
 	inp.TextSize = 14
 	inp.PlaceholderText = "type..."
-	inp.Size = UDim2.new(1,-306,1,0)
+	inp.Size = UDim2.new(1,-206,1,0)
 	inp.Parent = row
 
 	local ip = Instance.new("UIPadding")
 	ip.PaddingLeft = UDim.new(0,8)
 	ip.Parent = inp
 
-	local opts = lib.Options or {}
-	local use_web = false
-	if opts.AIEnableWeb and typeof(opts.AIEnableWeb.Value) == "boolean" then use_web = opts.AIEnableWeb.Value end
-	if typeof(getgenv().ai_enable_web) == "boolean" then use_web = getgenv().ai_enable_web end
+	local use_web = (typeof(getgenv().ai_enable_web) == "boolean") and getgenv().ai_enable_web or false
 
 	local web = Instance.new("TextButton")
 	web.BackgroundColor3 = lib.Scheme.MainColor
@@ -524,29 +539,13 @@ local function attach(win, opt)
 	web.TextSize = 14
 	web.TextColor3 = lib.Scheme.FontColor
 	web.Size = UDim2.new(0,96,1,0)
-	web.Position = UDim2.new(1,-300,0,0)
+	web.Position = UDim2.new(1,-200,0,0)
 	web.Parent = row
 
 	web.MouseButton1Click:Connect(function()
-		local p = get_current_provider()
 		use_web = not use_web
 		getgenv().ai_enable_web = use_web
 		web.Text = use_web and "web: on" or "web: off"
-	end)
-
-	local provbtn = Instance.new("TextButton")
-	provbtn.BackgroundColor3 = lib.Scheme.MainColor
-	provbtn.BorderColor3 = lib.Scheme.OutlineColor
-	provbtn.Text = "prov"
-	provbtn.FontFace = lib.Scheme.Font
-	provbtn.TextSize = 14
-	provbtn.TextColor3 = lib.Scheme.FontColor
-	provbtn.Size = UDim2.new(0,48,1,0)
-	provbtn.Position = UDim2.new(1,-200,0,0)
-	provbtn.Parent = row
-	provbtn.MouseButton1Click:Connect(function()
-		local p = get_current_provider()
-		lib:Notify("provider: "..p,2)
 	end)
 
 	local btn = Instance.new("TextButton")
@@ -909,7 +908,6 @@ local function attach(win, opt)
 		local k = get_provider_key(prov)
 
 		local want_mcp = false
-		if opts.AIEnableMCP and typeof(opts.AIEnableMCP.Value) == "boolean" then want_mcp = opts.AIEnableMCP.Value end
 		if typeof(getgenv().mcp_use_in_chat) == "boolean" and getgenv().mcp_enabled == true then want_mcp = getgenv().mcp_use_in_chat end
 
 		if prov == "openai" then
@@ -1032,11 +1030,12 @@ local function attach(win, opt)
 			else
 				local okj, data = pcall(hs.JSONDecode, hs, result.Body)
 				if okj and type(data) == "table" then
-					local buf = {}
-					if type(data.content) == "table" then
-						for _,c in ipairs(data.content) do if c and c.type == "text" and type(c.text) == "string" then table.insert(buf, c.text) end end
+					local txt = extract_anthropic_text(data)
+					if txt == "" then
+						out = "no answer text\nraw: "..string.sub(result.Body,1,1200)
+					else
+						out = txt
 					end
-					out = (#buf>0 and table.concat(buf, "\n")) or "no answer text"
 				else
 					out = "json parse error"
 				end
@@ -1102,5 +1101,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v15.3")
+print("ai_chat_ext v15.4")
 return { attach = attach }
