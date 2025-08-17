@@ -30,40 +30,50 @@ local function get_style()
 	return s
 end
 
-local function split_text_by_service(txt, max_width, font, textsize)
+local function split_text_aggressive(txt)
+	local max_chars = 8000
 	local chunks = {}
-	local max_chars = 50000
 	
 	if #txt <= max_chars then
-		local bounds = TextService:GetTextSize(txt, textsize, font, Vector2.new(max_width, math.huge))
-		if bounds.Y < 10000 then
-			return {txt}
-		end
+		return {txt}
 	end
 	
 	local lines = string.split(txt, "\n")
 	local current_chunk = ""
-	local current_chars = 0
 	
 	for i, line in ipairs(lines) do
-		local line_with_newline = (current_chunk == "" and line or "\n" .. line)
-		local new_chars = current_chars + #line_with_newline
+		local test_chunk = current_chunk == "" and line or (current_chunk .. "\n" .. line)
 		
-		if new_chars > max_chars and current_chunk ~= "" then
+		if #test_chunk > max_chars and current_chunk ~= "" then
 			table.insert(chunks, current_chunk)
 			current_chunk = line
-			current_chars = #line
 		else
-			current_chunk = current_chunk .. line_with_newline
-			current_chars = new_chars
+			current_chunk = test_chunk
 		end
 		
-		if current_chars > max_chars * 0.8 then
-			local test_bounds = TextService:GetTextSize(current_chunk, textsize, font, Vector2.new(max_width, math.huge))
-			if test_bounds.Y > 8000 then
+		if #current_chunk > max_chars then
+			if #current_chunk > max_chars * 2 then
+				local words = string.split(line, " ")
+				local word_chunk = ""
+				for _, word in ipairs(words) do
+					local test_word_chunk = word_chunk == "" and word or (word_chunk .. " " .. word)
+					if #test_word_chunk > max_chars and word_chunk ~= "" then
+						if current_chunk ~= "" then
+							table.insert(chunks, current_chunk)
+							current_chunk = ""
+						end
+						table.insert(chunks, word_chunk)
+						word_chunk = word
+					else
+						word_chunk = test_word_chunk
+					end
+				end
+				if word_chunk ~= "" then
+					current_chunk = word_chunk
+				end
+			else
 				table.insert(chunks, current_chunk)
 				current_chunk = ""
-				current_chars = 0
 			end
 		end
 	end
@@ -76,7 +86,7 @@ local function split_text_by_service(txt, max_width, font, textsize)
 end
 
 local function add_lbl(parent, txt, color)
-	local chunks = split_text_by_service(txt, parent.AbsoluteSize.X - 24, lib.Scheme.Font, 14)
+	local chunks = split_text_aggressive(txt)
 	local labels = {}
 	
 	for i, chunk in ipairs(chunks) do
@@ -132,20 +142,42 @@ local function add_code_block(gui, code)
 	if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
 		t = t:gsub("^%s*[%w%-_]*\n", "", 1)
 	end
-	if synx and synx.syn and synx.syn.hl then
-		local ok, res = pcall(function()
-			return synx.syn.hl(t)
-		end)
-		if ok and type(res) == "string" then
-			gui.Text = res
-			gui.RichText = true
+	
+	local chunks = split_text_aggressive(t)
+	if #chunks == 1 then
+		if synx and synx.syn and synx.syn.hl then
+			local ok, res = pcall(function()
+				return synx.syn.hl(t)
+			end)
+			if ok and type(res) == "string" then
+				gui.Text = res
+				gui.RichText = true
+			else
+				gui.Text = t
+				gui.RichText = false
+			end
 		else
 			gui.Text = t
 			gui.RichText = false
 		end
 	else
-		gui.Text = t
+		gui.Text = chunks[1]
 		gui.RichText = false
+		for i = 2, #chunks do
+			local extra = Instance.new("TextLabel")
+			extra.BackgroundColor3 = lib.Scheme.BackgroundColor
+			extra.TextXAlignment = Enum.TextXAlignment.Left
+			extra.TextYAlignment = Enum.TextYAlignment.Top
+			extra.TextWrapped = true
+			extra.FontFace = lib.Scheme.Font
+			extra.TextSize = 14
+			extra.TextColor3 = lib.Scheme.FontColor
+			extra.AutomaticSize = Enum.AutomaticSize.Y
+			extra.Size = UDim2.new(1,-12,0,0)
+			extra.Text = chunks[i]
+			extra.RichText = false
+			extra.Parent = gui.Parent
+		end
 	end
 	return t
 end
@@ -157,17 +189,7 @@ local function add_code_block_chunked(parent, code)
 		t = t:gsub("^%s*[%w%-_]*\n", "", 1)
 	end
 	
-	local processed_text = t
-	if synx and synx.syn and synx.syn.hl then
-		local ok, res = pcall(function()
-			return synx.syn.hl(t)
-		end)
-		if ok and type(res) == "string" then
-			processed_text = res
-		end
-	end
-	
-	local chunks = split_text_by_service(processed_text, parent.AbsoluteSize.X - 24, lib.Scheme.Font, 14)
+	local chunks = split_text_aggressive(t)
 	
 	for i, chunk in ipairs(chunks) do
 		local l = Instance.new("TextLabel")
@@ -181,7 +203,7 @@ local function add_code_block_chunked(parent, code)
 		l.AutomaticSize = Enum.AutomaticSize.Y
 		l.Size = UDim2.new(1,-12,0,0)
 		l.Text = chunk
-		l.RichText = synx and synx.syn and synx.syn.hl
+		l.RichText = false
 		l.Parent = parent
 		
 		if i > 1 then
@@ -844,30 +866,7 @@ local function attach(win, opt)
 		inner.Position = UDim2.fromOffset(2,2)
 		inner.Parent = holder
 		
-		local codebtn = Instance.new("TextButton")
-		codebtn.AutoButtonColor = true
-		codebtn.BackgroundTransparency = 1
-		codebtn.TextXAlignment = Enum.TextXAlignment.Left
-		codebtn.TextYAlignment = Enum.TextYAlignment.Top
-		codebtn.TextWrapped = true
-		codebtn.FontFace = lib.Scheme.Font
-		codebtn.TextSize = 14
-		codebtn.TextColor3 = lib.Scheme.FontColor
-		codebtn.AutomaticSize = Enum.AutomaticSize.Y
-		codebtn.Size = UDim2.new(1,-12,0,0)
-		codebtn.Position = UDim2.fromOffset(6,6)
-		codebtn.Parent = inner
-		
 		add_code_block_chunked(inner, code)
-		
-		codebtn.MouseButton1Click:Connect(function()
-			local t = code:gsub("\r","")
-			local first = t:match("^%s*([%w%-_]*)\n")
-			if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
-				t = t:gsub("^%s*[%w%-_]*\n", "", 1)
-			end
-			insert_code(t)
-		end)
 		
 		inner.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseWheel then
@@ -881,6 +880,25 @@ local function attach(win, opt)
 				end)
 			end
 		end)
+		
+		for _, child in ipairs(inner:GetChildren()) do
+			if child:IsA("TextLabel") then
+				local btn = Instance.new("TextButton")
+				btn.BackgroundTransparency = 1
+				btn.Size = child.Size
+				btn.Position = child.Position
+				btn.Text = ""
+				btn.Parent = inner
+				btn.MouseButton1Click:Connect(function()
+					local t = code:gsub("\r","")
+					local first = t:match("^%s*([%w%-_]*)\n")
+					if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
+						t = t:gsub("^%s*[%w%-_]*\n", "", 1)
+					end
+					insert_code(t)
+				end)
+			end
+		end
 	end
 
 	local gtab = win:AddTab("Game Scripts", "file-text")
@@ -1278,5 +1296,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v16.0 - textservice enabled")
+print("ai_chat_ext v16.1 - aggressive text chunking")
 return { attach = attach }
