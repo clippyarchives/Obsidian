@@ -30,66 +30,65 @@ local function get_style()
 	return s
 end
 
-local function split_text_aggressive(txt)
-	local max_chars = 8000
-	local chunks = {}
+local function create_scrollable_text_container(parent, txt, color, richText)
+	local container = Instance.new("Frame")
+	container.BackgroundColor3 = lib.Scheme.BackgroundColor
+	container.BorderColor3 = lib.Scheme.OutlineColor
+	container.BorderSizePixel = 1
+	container.Size = UDim2.new(1,-12,0,200)
+	container.AutomaticSize = Enum.AutomaticSize.Y
+	container.Parent = parent
 	
-	if #txt <= max_chars then
-		return {txt}
-	end
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.Size = UDim2.new(1,-4,1,-4)
+	scrollFrame.Position = UDim2.fromOffset(2,2)
+	scrollFrame.Parent = container
 	
-	local lines = string.split(txt, "\n")
-	local current_chunk = ""
+	local textLabel = Instance.new("TextLabel")
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextXAlignment = Enum.TextXAlignment.Left
+	textLabel.TextYAlignment = Enum.TextYAlignment.Top
+	textLabel.TextWrapped = true
+	textLabel.FontFace = lib.Scheme.Font
+	textLabel.TextSize = 14
+	textLabel.TextColor3 = color or lib.Scheme.FontColor
+	textLabel.Text = txt
+	textLabel.RichText = richText or false
+	textLabel.TextTruncate = Enum.TextTruncate.None
+	textLabel.Size = UDim2.new(1,-12,0,0)
+	textLabel.Position = UDim2.fromOffset(6,6)
+	textLabel.Parent = scrollFrame
 	
-	for i, line in ipairs(lines) do
-		local test_chunk = current_chunk == "" and line or (current_chunk .. "\n" .. line)
-		
-		if #test_chunk > max_chars and current_chunk ~= "" then
-			table.insert(chunks, current_chunk)
-			current_chunk = line
-		else
-			current_chunk = test_chunk
+	local function updateCanvasSize()
+		if textLabel.AbsoluteSize.X > 0 then
+			local textBounds = TextService:GetTextSize(
+				textLabel.Text,
+				textLabel.TextSize,
+				textLabel.FontFace,
+				Vector2.new(textLabel.AbsoluteSize.X, math.huge)
+			)
+			local textHeight = math.max(textBounds.Y, 20)
+			textLabel.Size = UDim2.new(1,-12,0,textHeight)
+			scrollFrame.CanvasSize = UDim2.new(0,0,0,textHeight + 12)
+			
+			local maxHeight = math.min(textHeight + 12, 400)
+			container.Size = UDim2.new(1,-12,0,maxHeight)
 		end
-		
-		if #current_chunk > max_chars then
-			if #current_chunk > max_chars * 2 then
-				local words = string.split(line, " ")
-				local word_chunk = ""
-				for _, word in ipairs(words) do
-					local test_word_chunk = word_chunk == "" and word or (word_chunk .. " " .. word)
-					if #test_word_chunk > max_chars and word_chunk ~= "" then
-						if current_chunk ~= "" then
-							table.insert(chunks, current_chunk)
-							current_chunk = ""
-						end
-						table.insert(chunks, word_chunk)
-						word_chunk = word
-					else
-						word_chunk = test_word_chunk
-					end
-				end
-				if word_chunk ~= "" then
-					current_chunk = word_chunk
-				end
-			else
-				table.insert(chunks, current_chunk)
-				current_chunk = ""
-			end
-		end
 	end
 	
-	if current_chunk ~= "" then
-		table.insert(chunks, current_chunk)
-	end
+	textLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCanvasSize)
+	task.defer(updateCanvasSize)
 	
-	return #chunks > 0 and chunks or {txt}
+	return textLabel
 end
 
 local function add_lbl(parent, txt, color)
-	local chunks = split_text_aggressive(txt)
-	local labels = {}
-	
-	for i, chunk in ipairs(chunks) do
+	if #txt > 10000 then
+		return create_scrollable_text_container(parent, txt, color, true)
+	else
 		local l = Instance.new("TextLabel")
 		l.BackgroundColor3 = lib.Scheme.BackgroundColor
 		l.TextXAlignment = Enum.TextXAlignment.Left
@@ -100,22 +99,12 @@ local function add_lbl(parent, txt, color)
 		l.TextColor3 = color or lib.Scheme.FontColor
 		l.AutomaticSize = Enum.AutomaticSize.Y
 		l.Size = UDim2.new(1,-12,0,0)
-		l.Text = chunk
+		l.Text = txt
 		l.RichText = true
+		l.TextTruncate = Enum.TextTruncate.None
 		l.Parent = parent
-		
-		if i > 1 then
-			local sep = Instance.new("Frame")
-			sep.BackgroundColor3 = lib.Scheme.OutlineColor
-			sep.BorderSizePixel = 0
-			sep.Size = UDim2.new(1,-12,0,1)
-			sep.Parent = parent
-		end
-		
-		table.insert(labels, l)
+		return l
 	end
-	
-	return labels[1]
 end
 
 local function add_line_with_prefix(parent, prefix_kind, body, model)
@@ -143,79 +132,102 @@ local function add_code_block(gui, code)
 		t = t:gsub("^%s*[%w%-_]*\n", "", 1)
 	end
 	
-	local chunks = split_text_aggressive(t)
-	if #chunks == 1 then
-		if synx and synx.syn and synx.syn.hl then
-			local ok, res = pcall(function()
-				return synx.syn.hl(t)
-			end)
-			if ok and type(res) == "string" then
-				gui.Text = res
-				gui.RichText = true
-			else
-				gui.Text = t
-				gui.RichText = false
-			end
+	if synx and synx.syn and synx.syn.hl then
+		local ok, res = pcall(function()
+			return synx.syn.hl(t)
+		end)
+		if ok and type(res) == "string" then
+			gui.Text = res
+			gui.RichText = true
 		else
 			gui.Text = t
 			gui.RichText = false
 		end
 	else
-		gui.Text = chunks[1]
+		gui.Text = t
 		gui.RichText = false
-		for i = 2, #chunks do
-			local extra = Instance.new("TextLabel")
-			extra.BackgroundColor3 = lib.Scheme.BackgroundColor
-			extra.TextXAlignment = Enum.TextXAlignment.Left
-			extra.TextYAlignment = Enum.TextYAlignment.Top
-			extra.TextWrapped = true
-			extra.FontFace = lib.Scheme.Font
-			extra.TextSize = 14
-			extra.TextColor3 = lib.Scheme.FontColor
-			extra.AutomaticSize = Enum.AutomaticSize.Y
-			extra.Size = UDim2.new(1,-12,0,0)
-			extra.Text = chunks[i]
-			extra.RichText = false
-			extra.Parent = gui.Parent
-		end
 	end
 	return t
 end
 
-local function add_code_block_chunked(parent, code)
+local function create_code_display(parent, code)
 	local t = code:gsub("\r","")
 	local first = t:match("^%s*([%w%-_]*)\n")
 	if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
 		t = t:gsub("^%s*[%w%-_]*\n", "", 1)
 	end
 	
-	local chunks = split_text_aggressive(t)
+	local container = Instance.new("Frame")
+	container.BackgroundColor3 = lib.Scheme.MainColor
+	container.BorderColor3 = lib.Scheme.OutlineColor
+	container.BorderSizePixel = 1
+	container.Size = UDim2.new(1,-12,0,300)
+	container.Parent = parent
 	
-	for i, chunk in ipairs(chunks) do
-		local l = Instance.new("TextLabel")
-		l.BackgroundColor3 = lib.Scheme.BackgroundColor
-		l.TextXAlignment = Enum.TextXAlignment.Left
-		l.TextYAlignment = Enum.TextYAlignment.Top
-		l.TextWrapped = true
-		l.FontFace = lib.Scheme.Font
-		l.TextSize = 14
-		l.TextColor3 = lib.Scheme.FontColor
-		l.AutomaticSize = Enum.AutomaticSize.Y
-		l.Size = UDim2.new(1,-12,0,0)
-		l.Text = chunk
-		l.RichText = false
-		l.Parent = parent
-		
-		if i > 1 then
-			local sep = Instance.new("Frame")
-			sep.BackgroundColor3 = lib.Scheme.OutlineColor
-			sep.BorderSizePixel = 0
-			sep.Size = UDim2.new(1,-12,0,1)
-			sep.Parent = parent
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.Size = UDim2.new(1,-4,1,-4)
+	scrollFrame.Position = UDim2.fromOffset(2,2)
+	scrollFrame.Parent = container
+	
+	local textLabel = Instance.new("TextLabel")
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextXAlignment = Enum.TextXAlignment.Left
+	textLabel.TextYAlignment = Enum.TextYAlignment.Top
+	textLabel.TextWrapped = false
+	textLabel.FontFace = Font.fromEnum(Enum.Font.RobotoMono)
+	textLabel.TextSize = 14
+	textLabel.TextColor3 = lib.Scheme.FontColor
+	textLabel.TextTruncate = Enum.TextTruncate.None
+	textLabel.Size = UDim2.new(1,-12,0,0)
+	textLabel.Position = UDim2.fromOffset(6,6)
+	textLabel.Parent = scrollFrame
+	
+	if synx and synx.syn and synx.syn.hl then
+		local ok, res = pcall(function()
+			return synx.syn.hl(t)
+		end)
+		if ok and type(res) == "string" then
+			textLabel.Text = res
+			textLabel.RichText = true
+		else
+			textLabel.Text = t
+			textLabel.RichText = false
+		end
+	else
+		textLabel.Text = t
+		textLabel.RichText = false
+	end
+	
+	local function updateCanvasSize()
+		if textLabel.AbsoluteSize.X > 0 then
+			local lines = string.split(textLabel.Text, "\n")
+			local lineHeight = 16
+			local totalHeight = #lines * lineHeight + 12
+			textLabel.Size = UDim2.new(1,-12,0,totalHeight)
+			scrollFrame.CanvasSize = UDim2.new(0,0,0,totalHeight)
 		end
 	end
 	
-	return t
+	textLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCanvasSize)
+	task.defer(updateCanvasSize)
+	
+	scrollFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseWheel then
+			for _, side in ipairs(getgenv().current_window and getgenv().current_window.ActiveTab and getgenv().current_window.ActiveTab.Sides or {}) do
+				side.ScrollingEnabled = false
+			end
+			task.delay(0.05, function()
+				for _, side in ipairs(getgenv().current_window and getgenv().current_window.ActiveTab and getgenv().current_window.ActiveTab.Sides or {}) do
+					side.ScrollingEnabled = true
+				end
+			end)
+		end
+	end)
+	
+	return textLabel, t
 end
 
 local function instance_path(inst)
@@ -483,6 +495,8 @@ local function attach(win, opt)
 	local provider = opt.provider or "openai"
 	local sys = opt.system or "you are a helpful assistant"
 	local ide = opt.ide
+
+	getgenv().current_window = win
 
 	local base_rules = {
 		sys,
@@ -849,56 +863,17 @@ local function attach(win, opt)
 	local function add_script(code)
 		table.insert(scripts_store, code)
 		
-		local holder = Instance.new("Frame")
-		holder.BackgroundColor3 = lib.Scheme.MainColor
-		holder.BorderColor3 = lib.Scheme.OutlineColor
-		holder.BorderSizePixel = 1
-		holder.Size = UDim2.new(1,-12,0,100)
-		holder.AutomaticSize = Enum.AutomaticSize.Y
-		holder.Parent = sbox
+		local codeLabel, cleanCode = create_code_display(sbox, code)
 		
-		local inner = Instance.new("ScrollingFrame")
-		inner.BackgroundTransparency = 1
-		inner.AutomaticCanvasSize = Enum.AutomaticSize.Y
-		inner.CanvasSize = UDim2.fromOffset(0,0)
-		inner.ScrollBarThickness = 2
-		inner.Size = UDim2.new(1,-4,1,-4)
-		inner.Position = UDim2.fromOffset(2,2)
-		inner.Parent = holder
+		local clickArea = Instance.new("TextButton")
+		clickArea.BackgroundTransparency = 1
+		clickArea.Size = UDim2.new(1,0,1,0)
+		clickArea.Text = ""
+		clickArea.Parent = codeLabel.Parent.Parent
 		
-		add_code_block_chunked(inner, code)
-		
-		inner.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseWheel then
-				for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
-					side.ScrollingEnabled = false
-				end
-				task.delay(0.05, function()
-					for _, side in ipairs(win.ActiveTab and win.ActiveTab.Sides or {}) do
-						side.ScrollingEnabled = true
-					end
-				end)
-			end
+		clickArea.MouseButton1Click:Connect(function()
+			insert_code(cleanCode)
 		end)
-		
-		for _, child in ipairs(inner:GetChildren()) do
-			if child:IsA("TextLabel") then
-				local btn = Instance.new("TextButton")
-				btn.BackgroundTransparency = 1
-				btn.Size = child.Size
-				btn.Position = child.Position
-				btn.Text = ""
-				btn.Parent = inner
-				btn.MouseButton1Click:Connect(function()
-					local t = code:gsub("\r","")
-					local first = t:match("^%s*([%w%-_]*)\n")
-					if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
-						t = t:gsub("^%s*[%w%-_]*\n", "", 1)
-					end
-					insert_code(t)
-				end)
-			end
-		end
 	end
 
 	local gtab = win:AddTab("Game Scripts", "file-text")
@@ -929,13 +904,34 @@ local function attach(win, opt)
 	pv.Position = UDim2.fromOffset(2,2)
 	pv.Parent = pvFrame
 
+	local pvText = Instance.new("TextLabel")
+	pvText.BackgroundTransparency = 1
+	pvText.TextXAlignment = Enum.TextXAlignment.Left
+	pvText.TextYAlignment = Enum.TextYAlignment.Top
+	pvText.TextWrapped = false
+	pvText.FontFace = Font.fromEnum(Enum.Font.RobotoMono)
+	pvText.TextSize = 14
+	pvText.TextColor3 = lib.Scheme.FontColor
+	pvText.TextTruncate = Enum.TextTruncate.None
+	pvText.Size = UDim2.new(1,-12,0,0)
+	pvText.Position = UDim2.fromOffset(6,6)
+	pvText.Parent = pv
+
 	local function apply_preview_text(src)
-		for _,c in ipairs(pv:GetChildren()) do 
-			if c:IsA("TextLabel") or c:IsA("Frame") then 
-				c:Destroy() 
-			end 
+		add_code_block(pvText, src or "select a script to preview")
+		
+		local function updatePreviewSize()
+			if pvText.AbsoluteSize.X > 0 then
+				local lines = string.split(pvText.Text, "\n")
+				local lineHeight = 16
+				local totalHeight = #lines * lineHeight + 12
+				pvText.Size = UDim2.new(1,-12,0,totalHeight)
+				pv.CanvasSize = UDim2.new(0,0,0,totalHeight)
+			end
 		end
-		add_code_block_chunked(pv, src or "select a script to preview")
+		
+		pvText:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePreviewSize)
+		task.defer(updatePreviewSize)
 	end
 
 	pv.InputBegan:Connect(function(input)
@@ -1296,5 +1292,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v16.1 - aggressive text chunking")
+print("ai_chat_ext v17.0 - dex-style scrollable text display")
 return { attach = attach }
