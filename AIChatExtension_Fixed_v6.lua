@@ -35,8 +35,7 @@ local function create_scrollable_text_container(parent, txt, color, richText)
 	container.BackgroundColor3 = lib.Scheme.BackgroundColor
 	container.BorderColor3 = lib.Scheme.OutlineColor
 	container.BorderSizePixel = 1
-	container.Size = UDim2.new(1,-12,0,200)
-	container.AutomaticSize = Enum.AutomaticSize.Y
+	container.Size = UDim2.new(1,-12,0,300)
 	container.Parent = parent
 	
 	local scrollFrame = Instance.new("ScrollingFrame")
@@ -56,13 +55,14 @@ local function create_scrollable_text_container(parent, txt, color, richText)
 	textLabel.TextSize = 14
 	textLabel.TextColor3 = color or lib.Scheme.FontColor
 	textLabel.Text = txt
-	textLabel.RichText = richText or false
+	textLabel.RichText = richText ~= false
 	textLabel.TextTruncate = Enum.TextTruncate.None
 	textLabel.Size = UDim2.new(1,-12,0,0)
 	textLabel.Position = UDim2.fromOffset(6,6)
 	textLabel.Parent = scrollFrame
 	
 	local function updateCanvasSize()
+		task.wait(0.1)
 		if textLabel.AbsoluteSize.X > 0 then
 			local textBounds = TextService:GetTextSize(
 				textLabel.Text,
@@ -70,23 +70,20 @@ local function create_scrollable_text_container(parent, txt, color, richText)
 				textLabel.FontFace,
 				Vector2.new(textLabel.AbsoluteSize.X, math.huge)
 			)
-			local textHeight = math.max(textBounds.Y, 20)
+			local textHeight = math.max(textBounds.Y + 20, 50)
 			textLabel.Size = UDim2.new(1,-12,0,textHeight)
 			scrollFrame.CanvasSize = UDim2.new(0,0,0,textHeight + 12)
-			
-			local maxHeight = math.min(textHeight + 12, 400)
-			container.Size = UDim2.new(1,-12,0,maxHeight)
 		end
 	end
 	
 	textLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCanvasSize)
-	task.defer(updateCanvasSize)
+	task.spawn(updateCanvasSize)
 	
 	return textLabel
 end
 
 local function add_lbl(parent, txt, color)
-	if #txt > 10000 then
+	if #txt > 3000 then
 		return create_scrollable_text_container(parent, txt, color, true)
 	else
 		local l = Instance.new("TextLabel")
@@ -130,6 +127,12 @@ local function add_code_block(gui, code)
 	local first = t:match("^%s*([%w%-_]*)\n")
 	if first and (#first<=5) and (first:lower()=="lua" or first:lower()=="luau") then
 		t = t:gsub("^%s*[%w%-_]*\n", "", 1)
+	end
+	
+	if #t > 3000 then
+		local parent = gui.Parent
+		gui:Destroy()
+		return create_scrollable_text_container(parent, t, lib.Scheme.FontColor, false)
 	end
 	
 	if synx and synx.syn and synx.syn.hl then
@@ -176,7 +179,7 @@ local function create_code_display(parent, code)
 	textLabel.BackgroundTransparency = 1
 	textLabel.TextXAlignment = Enum.TextXAlignment.Left
 	textLabel.TextYAlignment = Enum.TextYAlignment.Top
-	textLabel.TextWrapped = false
+	textLabel.TextWrapped = true
 	textLabel.FontFace = Font.fromEnum(Enum.Font.RobotoMono)
 	textLabel.TextSize = 14
 	textLabel.TextColor3 = lib.Scheme.FontColor
@@ -202,17 +205,22 @@ local function create_code_display(parent, code)
 	end
 	
 	local function updateCanvasSize()
+		task.wait(0.1)
 		if textLabel.AbsoluteSize.X > 0 then
-			local lines = string.split(textLabel.Text, "\n")
-			local lineHeight = 16
-			local totalHeight = #lines * lineHeight + 12
-			textLabel.Size = UDim2.new(1,-12,0,totalHeight)
-			scrollFrame.CanvasSize = UDim2.new(0,0,0,totalHeight)
+			local textBounds = TextService:GetTextSize(
+				textLabel.Text,
+				textLabel.TextSize,
+				textLabel.FontFace,
+				Vector2.new(textLabel.AbsoluteSize.X, math.huge)
+			)
+			local textHeight = math.max(textBounds.Y + 20, 100)
+			textLabel.Size = UDim2.new(1,-12,0,textHeight)
+			scrollFrame.CanvasSize = UDim2.new(0,0,0,textHeight + 12)
 		end
 	end
 	
 	textLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCanvasSize)
-	task.defer(updateCanvasSize)
+	task.spawn(updateCanvasSize)
 	
 	scrollFrame.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseWheel then
@@ -908,7 +916,7 @@ local function attach(win, opt)
 	pvText.BackgroundTransparency = 1
 	pvText.TextXAlignment = Enum.TextXAlignment.Left
 	pvText.TextYAlignment = Enum.TextYAlignment.Top
-	pvText.TextWrapped = false
+	pvText.TextWrapped = true
 	pvText.FontFace = Font.fromEnum(Enum.Font.RobotoMono)
 	pvText.TextSize = 14
 	pvText.TextColor3 = lib.Scheme.FontColor
@@ -918,20 +926,27 @@ local function attach(win, opt)
 	pvText.Parent = pv
 
 	local function apply_preview_text(src)
-		add_code_block(pvText, src or "select a script to preview")
+		local result = add_code_block(pvText, src or "select a script to preview")
 		
-		local function updatePreviewSize()
-			if pvText.AbsoluteSize.X > 0 then
-				local lines = string.split(pvText.Text, "\n")
-				local lineHeight = 16
-				local totalHeight = #lines * lineHeight + 12
-				pvText.Size = UDim2.new(1,-12,0,totalHeight)
-				pv.CanvasSize = UDim2.new(0,0,0,totalHeight)
+		if typeof(result) ~= "string" then
+			local function updatePreviewSize()
+				task.wait(0.1)
+				if pvText.AbsoluteSize.X > 0 then
+					local textBounds = TextService:GetTextSize(
+						pvText.Text,
+						pvText.TextSize,
+						pvText.FontFace,
+						Vector2.new(pvText.AbsoluteSize.X, math.huge)
+					)
+					local textHeight = math.max(textBounds.Y + 20, 100)
+					pvText.Size = UDim2.new(1,-12,0,textHeight)
+					pv.CanvasSize = UDim2.new(0,0,0,textHeight + 12)
+				end
 			end
+			
+			pvText:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePreviewSize)
+			task.spawn(updatePreviewSize)
 		end
-		
-		pvText:GetPropertyChangedSignal("AbsoluteSize"):Connect(updatePreviewSize)
-		task.defer(updatePreviewSize)
 	end
 
 	pv.InputBegan:Connect(function(input)
@@ -1292,5 +1307,5 @@ local function attach(win, opt)
 	return { tab = tab }
 end
 
-print("ai_chat_ext v17.0 - dex-style scrollable text display")
+print("ai_chat_ext v17.1 - aggressive scrollable containers")
 return { attach = attach }
